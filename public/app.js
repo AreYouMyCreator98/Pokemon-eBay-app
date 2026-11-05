@@ -142,7 +142,7 @@ async function loadDiscovery(force=false){
  const key=feedContextKey("FIXED");
  if(state.discoverLoadingKey===key)return;
  if(!force&&state.discoverKey===key&&Date.now()-state.discoverFetchedAt<4*60*1000){
-  if(state.tab==="discover"&&state.mode==="feed"){state.items=state.discoverItems;render();}
+  if(state.tab==="discover"&&state.mode==="feed"){state.items=state.discoverItems;$("#status").classList.remove("error");$("#status").textContent="Live Buy It Now picks across four TCGs · Updated "+new Date(state.discoverFetchedAt).toLocaleTimeString();render();}
   return;
  }
  const requestId=++state.discoverRequestId;
@@ -172,7 +172,7 @@ async function loadEndingSoon(force=false){
  const key=feedContextKey("AUCTION");
  if(state.endingLoadingKey===key)return;
  if(!force&&state.endingKey===key&&Date.now()-state.endingFetchedAt<70*1000){
-  if(state.tab==="ending"){state.items=state.endingItems;render();}
+  if(state.tab==="ending"){state.items=state.endingItems;$("#status").classList.remove("error");$("#status").textContent="Last-minute eBay auctions · Countdown window: "+state.endingWindow+" minutes · Updated "+new Date(state.endingFetchedAt).toLocaleTimeString();render();}
   return;
  }
  const requestId=++state.endingRequestId;

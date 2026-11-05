@@ -58,7 +58,7 @@ function renderSavedSearches(){
  host.innerHTML=state.savedSearches.map((s,i)=>'<button class="tag" data-saved-index="'+i+'">'+esc(s.query)+' · '+esc(s.marketplace)+' · '+esc(s.type)+' ↗</button>').join("");
 }
 function render(){
- renderSavedSearches();if(!$("#statsPanel").classList.contains("hidden"))renderMarketStats();
+ renderSavedSearches();
  const sold=state.tab==="sold";$("#soldNotice").classList.toggle("hidden",!sold);$("#listingGrid").classList.toggle("hidden",sold);
  const isFeed=state.tab==="discover"&&state.mode==="feed",isEnding=state.tab==="ending";
  $("#discoveryControls").classList.toggle("hidden",!isFeed);$("#endingControls").classList.toggle("hidden",!isEnding);
@@ -261,26 +261,14 @@ if("serviceWorker"in navigator)window.addEventListener("load",()=>navigator.serv
 state.items=[];render();setInterval(()=>{document.querySelectorAll("[data-end]").forEach(el=>el.textContent=remaining(el.dataset.end));checkAlerts();},15000);
 
 
-// Holographic custom controls: keep the original search, category and eBay actions intact.
-function renderMarketStats(){
- const items=state.items,auctionCount=items.filter(x=>(x.buyingOptions||[]).includes("AUCTION")).length;
- const fixedCount=items.filter(x=>(x.buyingOptions||[]).some(y=>y==="FIXED_PRICE"||y==="BEST_OFFER")).length;
- const prices=items.map(x=>Number(x.price)).filter(x=>Number.isFinite(x)&&x>0);
- const lowest=prices.length?Math.min(...prices):null;
- const currency=$("#marketplace").value==="US"?"USD":"AUD";
- const cells=[["Listings loaded",String(items.length)],["Auctions",String(auctionCount)],["Buy It Now",String(fixedCount)],["Lowest listed price",lowest==null?"No price data":money(lowest,currency)]];
- $("#statsContent").innerHTML=cells.map(([label,value])=>'<div class="tcg-stat"><span>'+esc(label)+'</span><strong>'+esc(value)+'</strong></div>').join("");
-}
-const setPanel=(which,open)=>{
- const panel=$("#"+which+"Panel"),trigger=$("#"+which+"NavBtn");panel.classList.toggle("hidden",!open);trigger.setAttribute("aria-expanded",String(open));
- if(open){if(which==="stats")renderMarketStats();panel.scrollIntoView({behavior:"smooth",block:"nearest"});}
-};
-$("#homeNavBtn").addEventListener("click",()=>{document.querySelector('[data-tab="discover"]')?.click();window.scrollTo({top:0,behavior:"smooth"});});
+// Holographic quick controls: separate Stats page and an accessible Info modal.
 $("#searchNavBtn").addEventListener("click",()=>{$("#searchInput").scrollIntoView({behavior:"smooth",block:"center"});$("#searchInput").focus({preventScroll:true});});
-$("#statsNavBtn").addEventListener("click",()=>{const open=$("#statsPanel").classList.contains("hidden");setPanel("info",false);setPanel("stats",open);});
-$("#infoNavBtn").addEventListener("click",()=>{const open=$("#infoPanel").classList.contains("hidden");setPanel("stats",false);setPanel("info",open);});
-$("#statsClose").addEventListener("click",()=>setPanel("stats",false));
-$("#infoClose").addEventListener("click",()=>setPanel("info",false));
+const infoDialog=$("#infoDialog");
+$("#infoNavBtn").addEventListener("click",()=>{if(!infoDialog.open)infoDialog.showModal();});
+const dismissInfo=()=>{if(infoDialog.open)infoDialog.close();};
+$("#infoClose").addEventListener("click",dismissInfo);
+$("#infoGotIt").addEventListener("click",dismissInfo);
+infoDialog.addEventListener("click",event=>{if(event.target===infoDialog)dismissInfo();});
 // Keep filter selections private until Apply, so using the dropdown doesn't repeatedly fetch from eBay.
 const FILTER_DEFAULTS=Object.freeze({shipFrom:"ANY",shipsTo:"ANY",marketplace:"AU",listingType:"ALL",sortBy:"endingSoonest",minPrice:"",maxPrice:"",setFilter:"",gradeFilter:"",conditionFilter:""});
 const FILTER_FIELDS=Object.keys(FILTER_DEFAULTS);
@@ -352,7 +340,7 @@ $("#filtersContent").addEventListener("keydown",event=>{
  if(event.shiftKey&&(document.activeElement===first||document.activeElement===$("#filtersContent"))){event.preventDefault();last.focus();}
  else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
 });
-document.addEventListener("keydown",event=>{if(event.key==="Escape"){if(!$("#filtersContent").classList.contains("hidden"))setFiltersOpen(false);setPanel("stats",false);setPanel("info",false);}});
+document.addEventListener("keydown",event=>{if(event.key==="Escape"){if(!$("#filtersContent").classList.contains("hidden"))setFiltersOpen(false);if(infoDialog.open)dismissInfo();}});
 updateFilterSummary();
 
 $("#accountBtn").addEventListener("click",openAccount);$("#accountClose").addEventListener("click",closeAccount);

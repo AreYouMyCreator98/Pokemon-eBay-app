@@ -83,6 +83,7 @@ function render(){
   $("#resultCount").textContent=visible.length+" of "+count+" live Buy It Now listings";
  }else $("#resultCount").textContent=visible.length+(isEnding?" auctions closing within "+state.endingWindow+" minutes":" listings")+(state.mode==="search"&&state.query?' for “'+state.query+'”':"");
  $("#listingGrid").classList.toggle("list-view",state.view==="list");
+ if(!visible.length){$("#listingGrid").innerHTML='<div class="empty"><strong>No matching listings</strong>'+(isEnding?"No live auctions match these filters within the next "+state.endingWindow+" minutes.":isFeed?"Try another TCG, card category or filter.":"Adjust your filters or search for a different card.")+"</div>";return;}
  $("#listingGrid").innerHTML=visible.map(item=>{
  const auction=(item.buyingOptions||[]).includes("AUCTION"),cat=category(item),condition=String(item.condition||"").trim();
  const url=/^https:\/\/www\.ebay\.(com\.au|com)\//i.test(item.url||"")?item.url:"";
@@ -194,7 +195,7 @@ async function loadEndingSoon(force=false){
  }finally{if(state.endingLoadingKey===key)state.endingLoadingKey="";}
 }
 function advanceDiscovery(direction){
- if(state.tab!=="discover"||state.mode!=="feed")return;
+ if(state.tab!=="discover"||state.mode!=="feed"||!state.discoverItems.length)return;
  state.discoverLastInteraction=Date.now();
  state.discoverPage+=direction;
  render();
@@ -217,8 +218,8 @@ $("#listingGrid").addEventListener("mouseleave",()=>state.discoverHover=false);
 $("#listingGrid").addEventListener("touchstart",()=>{state.discoverLastInteraction=Date.now();},{passive:true});
 
 async function search(){
- state.mode="search";state.tab="discover";document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.tab==="discover"));
  const q=$("#searchInput").value.trim();if(!q){$("#status").textContent="Enter a Pokémon, card name, set or product to search eBay.";return;}
+ state.mode="search";state.tab="discover";document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.tab==="discover"));
  state.query=q;$("#searchBtn").disabled=true;$("#searchBtn").classList.add("searching");$("#searchBtn").setAttribute("aria-label","Searching listings");$("#status").classList.remove("error");$("#status").textContent="Connecting to eBay Browse API…";
  const p=new URLSearchParams({q,marketplace:$("#marketplace").value,type:$("#listingType").value,sort:$("#sortBy").value,limit:"36"});
  if($("#shipFrom").value!=="ANY")p.set("shipFrom",$("#shipFrom").value);if($("#shipsTo").value!=="ANY")p.set("shipsTo",$("#shipsTo").value);if($("#minPrice").value)p.set("minPrice",$("#minPrice").value);if($("#maxPrice").value)p.set("maxPrice",$("#maxPrice").value);

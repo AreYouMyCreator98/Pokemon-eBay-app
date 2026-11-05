@@ -5,7 +5,8 @@ const FEEDS=[
  {id:"POKEMON",label:"Pokémon",q:"pokemon trading card"},
  {id:"ONE_PIECE",label:"One Piece",q:"one piece card game"},
  {id:"YUGIOH",label:"Yu-Gi-Oh!",q:"yugioh trading card"},
- {id:"MTG",label:"Magic: The Gathering",q:"magic the gathering mtg card"}
+ {id:"MTG",label:"Magic: The Gathering",q:"magic the gathering mtg card"},
+ {id:"ACCESSORIES",label:"TCG Binders & Supplies",q:"trading card binder"}
 ];
 const SEALED_PATTERN=/\b(?:sealed|booster\s*(?:box|pack|bundle|display)|elite\s*trainer\s*box|etb|blister|collection\s*(?:box|set)|display\s*box|collector\s*booster|starter\s*deck|structure\s*deck|theme\s*deck|sealed\s*deck|premium\s*collection|sealed\s*case|collector\s*box|tin|holiday\s*calendar|pre.?release\s*kit)\b/i;
 const GRADED_PATTERN=/\b(?:PSA|BGS|CGC|SGC|ACE)\s*(?:GEM\s*MINT\s*)?(?:10|9\.5|9|8\.5|8|7|6)\b|\b(?:graded|slabbed)\b/i;
@@ -31,13 +32,14 @@ const SAMPLE_LABELS=[
  ["POKEMON","Pokémon"],
  ["ONE_PIECE","One Piece"],
  ["YUGIOH","Yu-Gi-Oh!"],
- ["MTG","Magic: The Gathering"]
+ ["MTG","Magic: The Gathering"],
+ ["ACCESSORIES","TCG accessories"]
 ];
 let sampleRequestId=0,priceRequestId=0;
 async function loadMarketMix(){
  const requestId=++sampleRequestId,button=$("#refreshMix"),marketplace=$("#priceMarketplace").value;
  button.disabled=true;
- displayStatus($("#mixStatus"),"Sampling current Buy It Now listings across four trading-card games…");
+ displayStatus($("#mixStatus"),"Sampling Buy It Now listings across four TCGs plus card-game accessories…");
  try{
   const responses=await Promise.allSettled(FEEDS.map(async feed=>({feed,items:await fetchListings(feed.q,marketplace,30,false)})));
   if(requestId!==sampleRequestId)return;

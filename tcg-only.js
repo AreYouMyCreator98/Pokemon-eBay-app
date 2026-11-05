@@ -33,7 +33,7 @@ export function classifyTCGListing(item){
  if(collectible&&(franchise||tcgLabel||knownSet))return "ACCESSORIES";
  if(COLLECTION_WITH_CARDS.test(title)&&(franchise||tcgLabel||knownSet))return "ACCESSORIES";
  if(grade&&cardContext)return "GRADED";
- if(card&&(cardContext||number))return "RAW";
+ if(card&&(cardContext||number||/\b(?:cards?|holo|foil|rare|full art|near mint|promo)\b/.test(title)))return "RAW";
  if(franchise&&number)return "RAW";
  if(tcgLabel&&/\b(?:packs?|boxes?|lots?|sets?|singles?|sealed|cards?)\b/.test(title))return "RAW";
  // A very short brand/character-only search can be ambiguous: fail closed.

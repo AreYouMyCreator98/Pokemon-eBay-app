@@ -11,7 +11,7 @@ Status: **NOT PRODUCTION READY**. Do not register this callback or claim complia
 
 ## Remaining before registering with eBay
 
-1. Confirm eBay's current signature format and public-key response against official documentation and a test notification.
+1. Confirm eBay's ECDSA/SHA256 signature verification against an official signed test notification (eBay uses ECC, not RSA).
 2. Inventory *all* persisted eBay user data, including watchlist JSON snapshots, caches, logs, and backups. A seller username is not necessarily equivalent to the immutable user ID in deletion notifications.
 3. Implement a durable idempotent deletion queue, correct user-ID matching, deletion/redaction in all applicable stores, retries, auditing without retaining deleted personal data, and appropriate retention policy.
 4. Verify signature rejection, successful delivery, retries, duplicate delivery, deletion coverage and database permissions in staging.

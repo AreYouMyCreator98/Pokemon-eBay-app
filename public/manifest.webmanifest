@@ -1,0 +1,10 @@
+{
+  "name": "POKÉMARKET — Pokémon Auction Radar",
+  "short_name": "POKÉMARKET",
+  "description": "Read-only Pokémon eBay listing and auction dashboard.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090d18",
+  "theme_color": "#090d18",
+  "icons": []
+}

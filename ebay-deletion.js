@@ -14,7 +14,7 @@ async function verifiedNotification(req) {
   let meta;
   try { meta = JSON.parse(Buffer.from(header, "base64").toString("utf8")); }
   catch { throw new Error("Invalid signature header"); }
-  if (!meta || String(meta.alg).toLowerCase() !== "ecdsa" || !/^[A-Za-z0-9_-]{1,128}$/.test(meta.kid || "") ||
+  if (!meta || String(meta.alg).toLowerCase() !== "ecdsa" || String(meta.digest).toUpperCase() !== "SHA1" || !/^[A-Za-z0-9_-]{1,128}$/.test(meta.kid || "") ||
       typeof meta.signature !== "string") throw new Error("Unsupported signature");
   const chunks = [];
   let size = 0;
@@ -24,7 +24,8 @@ async function verifiedNotification(req) {
     chunks.push(chunk);
   }
   const raw = Buffer.concat(chunks);
-  let publicKey = keyCache.get(meta.kid);
+  const cached = keyCache.get(meta.kid);
+  let publicKey = cached && cached.expires > Date.now() ? cached.key : null;
   if (!publicKey) {
     const credentials = Buffer.from(process.env.EBAY_CLIENT_ID + ":" + process.env.EBAY_CLIENT_SECRET).toString("base64");
     const tokenResponse = await fetch("https://api.ebay.com/identity/v1/oauth2/token", {
@@ -41,10 +42,10 @@ async function verifiedNotification(req) {
     const keyData = await response.json();
     publicKey = keyData.key;
     if (typeof publicKey !== "string" || !publicKey.includes("BEGIN PUBLIC KEY")) throw new Error("Invalid public key");
-    keyCache.set(meta.kid, publicKey);
+    keyCache.set(meta.kid, { key: publicKey, expires: Date.now() + 3600000 });
     if (keyCache.size > 20) keyCache.delete(keyCache.keys().next().value);
   }
-  const verifier = createVerify("SHA256");
+  const verifier = createVerify("SHA1");
   verifier.update(raw);
   verifier.end();
   if (!verifier.verify(publicKey, Buffer.from(meta.signature, "base64"))) throw new Error("Signature mismatch");

@@ -8,7 +8,7 @@ A mobile-first, read-only Pokémon marketplace dashboard for eBay listings. Rese
 - eBay Australia and eBay US marketplace selection
 - Search, auction / Buy It Now filtering, price bounds and sort order
 - Listing cards with price, condition, seller details where supplied, bids and end-time countdown
-- Persistent local-device watchlist and saved searches that retain the full query, marketplace, listing type, sort order and price range
+- Supabase email/password accounts with per-user cloud watchlists and saved searches synced across devices, protected by Row Level Security
 - Browser notifications for watched auctions ending within 10 minutes while the app is open
 - Installable PWA shell
 - Sold-history page that clearly explains why verified sold data is not yet available

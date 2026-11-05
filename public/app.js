@@ -23,20 +23,19 @@ async function syncCollection(key,value){
 }
 async function loadCloudData(user){
  cloudReady=false;cloudUser=user;
- const [w,s]=await Promise.all([supabase.from("user_watchlist").select("item_id,item_snapshot,created_at").eq("user_id",user.id).order("created_at",{ascending:false}),supabase.from("user_saved_searches").select("search_key,query,marketplace,listing_type,sort_by,min_price,max_price,created_at").eq("user_id",user.id).order("created_at",{ascending:false})]);
- if(w.error)throw w.error;if(s.error)throw s.error;
- const localWatch=[],localSearch=state.savedSearches;
- if(!w.data.length&&localWatch.length){const rows=localWatch.map(x=>({user_id:user.id,item_id:String(x.id),item_url:x.url||null,item_title:"",item_snapshot:{}}));const m=await supabase.from("user_watchlist").upsert(rows,{onConflict:"user_id,item_id"});if(m.error)throw m.error;}
+ const [s]=await Promise.all([supabase.from("user_saved_searches").select("search_key,query,marketplace,listing_type,sort_by,min_price,max_price,created_at").eq("user_id",user.id).order("created_at",{ascending:false})]);
+ if(s.error)throw s.error;
+ const localSearch=state.savedSearches;
  if(!s.data.length&&localSearch.length){const rows=localSearch.map(x=>({user_id:user.id,search_key:String(x.id),query:x.query,marketplace:x.marketplace,listing_type:x.type,sort_by:x.sort,min_price:x.minPrice===""?null:Number(x.minPrice),max_price:x.maxPrice===""?null:Number(x.maxPrice)}));const m=await supabase.from("user_saved_searches").upsert(rows,{onConflict:"user_id,search_key"});if(m.error)throw m.error;}
- const [wr,sr]=await Promise.all([supabase.from("user_watchlist").select("item_url").eq("user_id",user.id).order("created_at",{ascending:false}),supabase.from("user_saved_searches").select("search_key,query,marketplace,listing_type,sort_by,min_price,max_price").eq("user_id",user.id).order("created_at",{ascending:false})]);
- if(wr.error)throw wr.error;if(sr.error)throw sr.error;
+ const [sr]=await Promise.all([supabase.from("user_saved_searches").select("search_key,query,marketplace,listing_type,sort_by,min_price,max_price").eq("user_id",user.id).order("created_at",{ascending:false})]);
+ if(sr.error)throw sr.error;
  state.watchlist=[];state.savedSearches=sr.data.map(x=>({id:x.search_key,query:x.query,marketplace:x.marketplace,type:x.listing_type,sort:x.sort_by,minPrice:x.min_price==null?"":String(x.min_price),maxPrice:x.max_price==null?"":String(x.max_price)}));
- localStorage.setItem("pokemarket-watchlist",JSON.stringify(state.watchlist));localStorage.setItem("pokemarket-searches",JSON.stringify(state.savedSearches));
+ localStorage.removeItem("pokemarket-watchlist");localStorage.setItem("pokemarket-searches",JSON.stringify(state.savedSearches));
  cloudReady=true;render();$("#accountTitle").textContent="Collector account";$("#accountEmail").textContent=user.email||"Signed in";$("#authForm").classList.add("hidden");$("#signedInActions").classList.remove("hidden");$("#accountBtn").textContent="My account";setAccountMessage("Your saved searches are syncing across devices.");
 }
 async function handleAuthSession(session){
  if(session?.user){try{await loadCloudData(session.user);}catch(error){cloudUser=session.user;cloudReady=false;setAccountMessage("Signed in, but cloud data could not load: "+error.message,true);}}
- else{cloudUser=null;cloudReady=false;state.watchlist=[];state.savedSearches=[];localStorage.removeItem("pokemarket-watchlist");localStorage.removeItem("pokemarket-searches");$("#authForm").classList.remove("hidden");$("#signedInActions").classList.add("hidden");$("#accountTitle").textContent="Your account";$("#accountBtn").textContent="Sign in";setAccountMessage("Sign in to sync your watchlist and saved searches across devices.");render();}
+ else{cloudUser=null;cloudReady=false;state.watchlist=[];state.savedSearches=[];localStorage.removeItem("pokemarket-watchlist");localStorage.removeItem("pokemarket-searches");$("#authForm").classList.remove("hidden");$("#signedInActions").classList.add("hidden");$("#accountTitle").textContent="Your account";$("#accountBtn").textContent="Sign in";setAccountMessage("Sign in to sync your saved searches across devices.");render();}
 }
 const state={tab:"discover",items:[],query:"",watchlist:[],savedSearches:load("pokemarket-searches",[]).map(x=>typeof x==="string"?{id:x,query:x,marketplace:"AU",type:"ALL",sort:"endingSoonest",minPrice:"",maxPrice:""}:x),alerted:load("pokemarket-alerted",[])};
 function load(key,fallback){try{return JSON.parse(localStorage.getItem(key))??fallback;}catch{return fallback;}}
@@ -55,7 +54,7 @@ function renderSavedSearches(){
  host.innerHTML=state.savedSearches.map((s,i)=>'<button class="tag" data-saved-index="'+i+'">'+esc(s.query)+' · '+esc(s.marketplace)+' · '+esc(s.type)+' ↗</button>').join("");
 }
 function render(){
- $("#watchCount").textContent=state.watchlist.length;renderSavedSearches();
+ renderSavedSearches();
  const sold=state.tab==="sold";$("#soldNotice").classList.toggle("hidden",!sold);$("#listingGrid").classList.toggle("hidden",sold);
  const labels={discover:["LIVE MARKETPLACE","Featured listings"],ending:["AUCTION RADAR","Ending soon"],watchlist:["YOUR COLLECTION","Watchlist"],sold:["MARKET HISTORY","Recently sold"]};
  $("#sectionEyebrow").textContent=labels[state.tab][0];$("#sectionTitle").textContent=labels[state.tab][1];
@@ -80,18 +79,18 @@ async function search(){
 }
 document.addEventListener("click",event=>{
  const tab=event.target.closest("[data-tab]");if(tab){state.tab=tab.dataset.tab;document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===tab));if(state.tab==="sold")$("#status").textContent="Sold-history access is not enabled until an approved eBay data source is connected.";render();return;}
- const watch=event.target.closest("[data-watch-disabled]");if(watch){const id=watch.dataset.watch;const item=[...state.items,...state.watchlist].find(x=>x&&(x.id===id||x.url===id));const targetUrl=item?.url||id;const existing=state.watchlist.find(x=>x&&x.url===targetUrl);if(existing)state.watchlist=state.watchlist.filter(x=>x?.url!==targetUrl);else{if(item){const saved=safeSnapshot(item);if(saved)state.watchlist.push(saved);}}save("pokemarket-watchlist",state.watchlist);render();return;}
+ const watch=event.target.closest("[data-never-watch]");if(watch){const id=watch.dataset.watch;const item=[...state.items,...state.watchlist].find(x=>x&&(x.id===id||x.url===id));const targetUrl=item?.url||id;const existing=state.watchlist.find(x=>x&&x.url===targetUrl);if(existing)state.watchlist=state.watchlist.filter(x=>x?.url!==targetUrl);else{if(item){const saved=safeSnapshot(item);if(saved)state.watchlist.push(saved);}}save("pokemarket-watchlist",state.watchlist);render();return;}
  const saved=event.target.closest("[data-saved-index]");if(saved){const s=state.savedSearches[Number(saved.dataset.savedIndex)];if(s){$("#searchInput").value=s.query;$("#marketplace").value=s.marketplace;$("#listingType").value=s.type;$("#sortBy").value=s.sort;$("#minPrice").value=s.minPrice;$("#maxPrice").value=s.maxPrice;state.tab="discover";document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.tab==="discover"));search();}return;}
  const tag=event.target.closest("[data-query]");if(tag){$("#searchInput").value=tag.dataset.query;search();}
 });
 $("#searchBtn").addEventListener("click",search);$("#searchInput").addEventListener("keydown",e=>{if(e.key==="Enter")search();});
 ["marketplace","listingType","sortBy","minPrice","maxPrice"].forEach(id=>$("#"+id).addEventListener("change",()=>{if(state.query)search();}));
 $("#saveSearchBtn").addEventListener("click",()=>{const q=$("#searchInput").value.trim();if(!q){$("#status").textContent="Search for something first, then save that search.";return;}const item={id:[q,$("#marketplace").value,$("#listingType").value,$("#sortBy").value,$("#minPrice").value,$("#maxPrice").value].join("|"),query:q,marketplace:$("#marketplace").value,type:$("#listingType").value,sort:$("#sortBy").value,minPrice:$("#minPrice").value,maxPrice:$("#maxPrice").value};state.savedSearches=state.savedSearches.filter(s=>s.id!==item.id);state.savedSearches.unshift(item);state.savedSearches=state.savedSearches.slice(0,12);save("pokemarket-searches",state.savedSearches);renderSavedSearches();$("#status").textContent="Saved complete search and filters on this device: "+q;});
-$("#notifyBtn").addEventListener("click",async()=>{if(!("Notification"in window)){ $("#status").textContent="This browser does not support notifications.";return;}const permission=await Notification.requestPermission();$("#status").textContent=permission==="granted"?"Auction alerts enabled while POKÉMARKET is open. Watchlisted auctions ending within 10 minutes will trigger a reminder.":"Notifications were not enabled.";});
+$("#notifyBtn").addEventListener("click",async()=>{if(!("Notification"in window)){ $("#status").textContent="This browser does not support notifications.";return;}const permission=await Notification.requestPermission();$("#status").textContent=permission==="granted"?"Auction alerts enabled while POKÉMARKET is open. Alerts only work while the app is open and are based on currently displayed auctions.":"Notifications were not enabled.";});
 function checkAlerts(){
  if(!("Notification"in window)||Notification.permission!=="granted")return;
- for(const item of state.watchlist){if(!item||!item.endTime)continue;const ms=new Date(item.endTime).getTime()-Date.now();if(ms>0&&ms<=10*60*1000&&!state.alerted.includes(item.id)){new Notification("Auction ending soon",{body:(item.title||"Your watched listing")+" · "+remaining(item.endTime)});state.alerted.push(item.id);}}
- state.alerted=state.alerted.slice(-300);save("pokemarket-alerted",state.alerted);
+ for(const item of state.items){if(!item||!item.endTime)continue;const ms=new Date(item.endTime).getTime()-Date.now();if(ms>0&&ms<=10*60*1000&&!state.alerted.includes(item.id)){new Notification("Auction ending soon",{body:(item.title||"Your watched listing")+" · "+remaining(item.endTime)});state.alerted.push(item.id);}}
+ state.alerted=state.alerted.slice(-300);
 }
 if("serviceWorker"in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));
 state.items=load("pokemarket-last-items",[]);render();setInterval(()=>{document.querySelectorAll("[data-end]").forEach(el=>el.textContent=remaining(el.dataset.end));checkAlerts();},15000);

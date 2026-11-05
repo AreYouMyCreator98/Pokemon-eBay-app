@@ -17,7 +17,7 @@ try {
 const MARKETPLACES = { AU: { id: "EBAY_AU", currency: "AUD" }, US: { id: "EBAY_US", currency: "USD" } };
 let tokenCache = { value: "", expiresAt: 0 };
 let tokenPromise;
-const mime = { ".html":"text/html; charset=utf-8", ".css":"text/css; charset=utf-8", ".js":"text/javascript; charset=utf-8", ".json":"application/json; charset=utf-8", ".webmanifest":"application/manifest+json", ".svg":"image/svg+xml" };
+const mime = { ".html":"text/html; charset=utf-8", ".css":"text/css; charset=utf-8", ".js":"text/javascript; charset=utf-8", ".json":"application/json; charset=utf-8", ".webmanifest":"application/manifest+json", ".svg":"image/svg+xml", ".webp":"image/webp", ".png":"image/png", ".ico":"image/x-icon" };
 function send(res,status,body,type="application/json; charset=utf-8") {
   res.writeHead(status,{"Content-Type":type,"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"});
   res.end(type.startsWith("application/json")?JSON.stringify(body):body);
@@ -80,4 +80,4 @@ const server=http.createServer(async(req,res)=>{
   if(!file.startsWith(PUBLIC))return send(res,403,{error:"Forbidden"});
   try{const body=await readFile(file);res.writeHead(200,{"Content-Type":mime[extname(file)]||"application/octet-stream","X-Content-Type-Options":"nosniff"});res.end(body);}catch{send(res,404,"Not found","text/plain; charset=utf-8");}
 });
-server.listen(PORT,()=>console.log("POKÉMARKET running on port "+PORT));
+server.listen(PORT,()=>console.log("TCG Bid Buy Watch running on port "+PORT));

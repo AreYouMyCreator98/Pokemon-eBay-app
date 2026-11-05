@@ -42,6 +42,8 @@ const state={tab:"discover",items:[],query:"",watchlist:load("pokemarket-watchli
 function load(key,fallback){try{return JSON.parse(localStorage.getItem(key))??fallback;}catch{return fallback;}}
 // Remove previously cached eBay seller details, including older watchlist snapshots.
 for(const key of ["pokemarket-last-items","pokemarket-alerted"])localStorage.removeItem(key);
+// Rewrite older watchlists immediately, even if the user never edits them.
+try{const old=localStorage.getItem("pokemarket-watchlist");if(old!==null){const parsed=JSON.parse(old);localStorage.setItem("pokemarket-watchlist",JSON.stringify(Array.isArray(parsed)?parsed.map(safeSnapshot).filter(Boolean):[]));}}catch{localStorage.removeItem("pokemarket-watchlist");}
 function save(key,value){if(key==="pokemarket-watchlist")value=value.map(safeSnapshot).filter(Boolean);localStorage.setItem(key,JSON.stringify(value));if(key==="pokemarket-watchlist"||key==="pokemarket-searches")void syncCollection(key,value);}
 function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function money(v,c){return v==null?"Price unavailable":new Intl.NumberFormat(undefined,{style:"currency",currency:c||"AUD",maximumFractionDigits:2}).format(v);}

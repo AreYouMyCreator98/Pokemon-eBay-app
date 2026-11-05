@@ -32,7 +32,7 @@ async function ebayToken() {
     const auth=Buffer.from(id+":"+secret).toString("base64");
     const response=await fetch("https://api.ebay.com/identity/v1/oauth2/token",{method:"POST",headers:{Authorization:"Basic "+auth,"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({grant_type:"client_credentials",scope:"https://api.ebay.com/oauth/api_scope"})});
     const data=await response.json();
-    if(!response.ok||!data.access_token)throw new Error(data.error_description||"Could not authenticate with eBay.");
+    if(!response.ok||!data.access_token){console.error("eBay OAuth token rejected",{status:response.status,errorCode:typeof data.error==="string"?data.error:"unknown"});throw new Error("eBay Production authentication failed (HTTP "+response.status+"). Check Production keyset activation and credential pairing.");}
     tokenCache={value:data.access_token,expiresAt:Date.now()+Number(data.expires_in||7200)*1000};
     return tokenCache.value;
   })();

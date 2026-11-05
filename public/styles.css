@@ -209,3 +209,17 @@ body.filters-open{overflow:hidden}
 .listing-card.type-accessories .listing-image{background-image:radial-gradient(circle at 45% 60%,#3a2a78,#11172c 75%);background-size:cover}
 @media(max-width:600px){.category-filters{grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:2px}.category-filters .overlay-filter-chip{padding:0!important;min-width:0!important}.category-filters .overlay-filter-chip img{max-height:34px!important}.category-filters .overlay-filter-chip[data-category="ACCESSORIES"] img{max-height:34px!important}}
 @media(max-width:390px){.category-filters .overlay-filter-chip img{max-height:30px!important}.category-filters .overlay-filter-chip[data-category="ACCESSORIES"] img{max-height:30px!important}}
+
+/* V12 strict eBay price filters: budget presets and visible applied budget. */
+.price-presets{margin:2px 0 17px;padding:12px 13px;border:1px solid #7868c374;border-radius:13px;background:radial-gradient(circle at top right,#7942bc29,transparent 53%),#0c17348a}
+.price-presets-title{display:block;margin-bottom:10px;color:#9fdfff;font-size:10px;letter-spacing:1.35px;font-weight:900}
+.price-preset-buttons{display:flex;flex-wrap:wrap;gap:7px}
+.price-preset-buttons button{flex:0 1 auto;min-height:34px;padding:8px 12px;border:1px solid #7769b29e;border-radius:22px;background:#17244c;color:#c3d3f3;font-weight:800;font-size:11px;white-space:nowrap;cursor:pointer;transition:background .15s ease,border-color .15s ease,box-shadow .15s ease}
+.price-preset-buttons button.active,.price-preset-buttons button[aria-pressed=true]{color:#fff;border-color:#c79dff;background:linear-gradient(115deg,#5c339d,#28568a);box-shadow:0 0 12px #ab69ff6b}
+.price-preset-buttons button:hover{border-color:#7eeaff;filter:brightness(1.15)}
+.price-preset-buttons button:focus-visible{outline:2px solid #80ebff;outline-offset:3px}
+#priceFilterHint{color:#9eafd4;line-height:1.6;font-size:11px;margin:11px 0 0}
+.active-price-band{display:flex;align-items:center;gap:7px;width:100%;border:1px solid #73cfff8c;border-radius:10px;padding:9px 12px;margin:6px 0 9px;background:linear-gradient(105deg,#0c3a5575,#30215d91);color:#bbebff;font-weight:900;font-size:11px;line-height:1.4;letter-spacing:.2px}
+.active-price-band:before{content:"✓";display:grid;place-items:center;flex:none;width:18px;height:18px;border-radius:50%;background:#3d7eaa83;color:#fff;font-size:11px;border:1px solid #7bdffb}
+@media(max-width:600px){.price-presets{padding:10px 11px;margin-bottom:12px}.price-preset-buttons{gap:6px}.price-preset-buttons button{font-size:10px;min-height:36px;padding:8px 10px}.active-price-band{font-size:10px;padding:9px 10px}#priceFilterHint{font-size:10px}}
+@media(prefers-reduced-motion:reduce){.price-preset-buttons button{transition:none}}

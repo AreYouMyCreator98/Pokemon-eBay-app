@@ -109,7 +109,7 @@ async function searchEbay(params) {
   }
   const items=found.slice(0,limit).map(({_relevance,_variant,...item})=>item);
   return {items,total:items.length,marketplace:key,currency:market.currency,source:"eBay Browse API",fetchedAt:new Date().toISOString(),
-   searchMeta:{query:q,corrected:primary.autoCorrections?.q||null,expanded:attempts.length>1,alternatives:attempts.length>1?attempts.slice(1):[],matches:items.length}};
+   searchMeta:{query:q,corrected:primary.autoCorrections?.q||null,interpretedAs:plan.spellingChanged?plan.canonical:null,expanded:attempts.length>1,alternatives:attempts.length>1?attempts.slice(1):[],matches:items.length}};
 }
 const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,"http://localhost");

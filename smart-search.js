@@ -1,5 +1,5 @@
 // Relevance-aware keyword plans for eBay. Actual prices and listings come only from eBay.
-export function norm(text){return String(text||"").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").replace(/\s+/g," ").trim();}
+export function norm(text){return String(text||"").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").replace(/\s+/g," ").trim().replace(/\byu gi oh\b/g,"yugioh").replace(/\bmagic the gathering\b/g,"mtg").replace(/\b(op|sv)\s+0?(\d{1,3})\b/g,(_,prefix,n)=>prefix+n.padStart(2,"0"));}
 const TYPOS={prsimatic:"prismatic",prismtic:"prismatic",prismatics:"prismatic",evolutons:"evolutions",boster:"booster",booser:"booster",bundel:"bundle",bunlde:"bundle",dispay:"display",diplay:"display",dispaly:"display",pokmon:"pokemon",pokeman:"pokemon",poekmon:"pokemon",chraizard:"charizard",charzard:"charizard",umbrean:"umbreon",boosterbox:"booster box"};
 const STOP=new Set(["the","a","an","for","of","with","and","in","from","on","card","cards","tcg","trading","game","new","sealed"]);
 const PRODUCT=new Set(["bundle","bundles","booster","boosters","box","boxes","pack","packs","etb","tin","tins","collection","deck","decks","blister","case","cases","display","raw","graded","slab","slabbed","psa","bgs","cgc","sgc","ace"]);
@@ -71,7 +71,7 @@ export function scoreSearchItem(item,plan){
  if(/\bsealed\b/.test(original)&&/\bsealed\b/.test(title))score+=8;
  if(/\bgraded\b/.test(original)&&/\b(psa|bgs|cgc|sgc|graded)\b/.test(title))score+=8;
  if(/\braw\b/.test(original)&&/\braw\b/.test(title))score+=8;
- if(/\b(proxy|custom|digital|empty box|empty pack|wrapper only|code cards|replica|orica|non official|fan art)\b/.test(title))score-=55;
+ if(/\b(proxy|custom|digital|empty box|empty pack|wrapper only|code cards|replica|orica|non official|fan art)\b/.test(title)&&!/\b(proxy|custom|digital|empty|wrapper|code card|replica|orica|fan art)\b/.test(original))return -1;
  if(/\b(bundle|booster|etb|pack|box|sealed)\b/.test(original)&&/\b(single|single card|loose card)\b/.test(title))score-=25;
  return score;
 }

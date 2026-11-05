@@ -323,16 +323,37 @@ infoDialog.addEventListener("click",event=>{if(event.target===infoDialog)dismiss
 // Keep filter selections private until Apply, so using the dropdown doesn't repeatedly fetch from eBay.
 function readFilterValues(){return Object.fromEntries(FILTER_FIELDS.map(id=>[id,$("#"+id).value]));}
 function writeFilterValues(values){for(const id of FILTER_FIELDS)$("#"+id).value=values[id]??FILTER_DEFAULTS[id];syncPricePresets();}
+function syncPricePresets(){
+ const currentMin=$("#minPrice").value.trim(),currentMax=$("#maxPrice").value.trim();
+ document.querySelectorAll("[data-price-preset]").forEach(button=>{
+  const setting=button.dataset.pricePreset;
+  const [min,max]=setting==="all"?["",""]:setting.split(":");
+  const active=currentMin===(min||"")&&currentMax===(max||"");
+  button.classList.toggle("active",active);
+  button.setAttribute("aria-pressed",String(active));
+ });
+}
+document.querySelectorAll("[data-price-preset]").forEach(button=>button.addEventListener("click",()=>{
+ const key=button.dataset.pricePreset;
+ const [min,max]=key==="all"?["",""]:key.split(":");
+ $("#minPrice").value=min;$("#maxPrice").value=max;
+ syncPricePresets();
+}));
+["minPrice","maxPrice"].forEach(id=>$("#"+id).addEventListener("input",syncPricePresets));
 let resetCategoryOnApply=false;
 function updateFilterSummary(){
  const active=FILTER_FIELDS.filter(id=>appliedFilters[id]!==FILTER_DEFAULTS[id]);
+ const bounds=priceBounds(appliedFilters),currency=appliedFilters.marketplace==="US"?"USD":"AUD";
+ const format=value=>new Intl.NumberFormat("en-AU",{style:"currency",currency}).format(value/100);
+ const band=bounds.active?(bounds.minCents===null?"Up to "+format(bounds.maxCents):bounds.maxCents===null?format(bounds.minCents)+" and up":format(bounds.minCents)+" – "+format(bounds.maxCents)):"";
+ const notice=$("#activePriceBand");notice.classList.toggle("hidden",!bounds.active);notice.textContent=bounds.active?"PRICE FILTER ACTIVE · "+band+" · Item price only (shipping extra)":"";
  const names={shipFrom:"From",shipsTo:"Ships to",marketplace:"Market",listingType:"Type",sortBy:"Sort",minPrice:"Min",maxPrice:"Max",setFilter:"Set",gradeFilter:"Grade",conditionFilter:"Condition"};
  const chosen=active.map(id=>{
   const field=$("#"+id);
   const value=(field.tagName==="SELECT"?field.selectedOptions[0]?.textContent:field.value)||appliedFilters[id];
   return names[id]+": "+String(value).trim();
  });
- $("#filterSummaryText").textContent=active.length?active.length+" active filter"+(active.length===1?"":"s")+" · "+chosen.slice(0,2).join(" · ")+(chosen.length>2?" · +"+(chosen.length-2)+" more":""):"All listings · Worldwide · eBay Australia";
+ $("#filterSummaryText").textContent=active.length?(band?band+" · ":"")+active.length+" active filter"+(active.length===1?"":"s")+" · "+chosen.filter(x=>!/^Min:|^Max:/.test(x)).slice(0,2).join(" · "):"All listings · Worldwide · eBay Australia";
  $("#filterSummary").classList.toggle("has-active",active.length>0);
  $("#filterToggle").setAttribute("aria-label",active.length?"Open search filters, "+active.length+" active":"Open search filters");
 }
@@ -352,8 +373,8 @@ function setFiltersOpen(open){
 }
 function applySearchFilters(){
  const next=readFilterValues();
- if(next.minPrice!==""&&next.maxPrice!==""&&Number(next.minPrice)>Number(next.maxPrice)){
-  $("#filterError").textContent="Minimum price cannot be higher than maximum price.";
+ try{priceBounds(next);}catch(error){
+  $("#filterError").textContent=error.message||"Invalid price range.";
   $("#filterError").classList.remove("hidden");
   $("#minPrice").focus();
   return;
@@ -367,11 +388,11 @@ function applySearchFilters(){
   state.category="ALL";
   document.querySelectorAll("[data-category]").forEach(x=>x.classList.toggle("active",x.dataset.category==="ALL"));
  }
+ render(); // Immediately remove old/out-of-budget cards before the next eBay response arrives.
  if(state.tab==="ending")void loadEndingSoon(true);
  else if(state.mode==="feed")void loadDiscovery(true);
  else if(state.query)void search();
- else render();
- if(previous.shipFrom!==next.shipFrom||previous.shipsTo!==next.shipsTo)void loadSpotlight();
+ if(previous.shipFrom!==next.shipFrom||previous.shipsTo!==next.shipsTo||previous.marketplace!==next.marketplace||previous.minPrice!==next.minPrice||previous.maxPrice!==next.maxPrice)void loadSpotlight();
 }
 $("#filterToggle").addEventListener("click",()=>setFiltersOpen($("#filtersContent").classList.contains("hidden")));
 $("#filterSummary").addEventListener("click",()=>setFiltersOpen(true));
@@ -390,6 +411,7 @@ $("#filtersContent").addEventListener("keydown",event=>{
 });
 document.addEventListener("keydown",event=>{if(event.key==="Escape"){if(!$("#filtersContent").classList.contains("hidden"))setFiltersOpen(false);if(infoDialog.open)dismissInfo();}});
 updateFilterSummary();
+syncPricePresets();
 
 $("#accountBtn").addEventListener("click",openAccount);$("#accountClose").addEventListener("click",closeAccount);
 $("#authToggle").addEventListener("click",()=>{authMode=authMode==="signin"?"signup":"signin";$("#authSubmit").textContent=authMode==="signin"?"Sign in":"Create account";$("#authToggle").textContent=authMode==="signin"?"Create account":"Back to sign in";$("#authPassword").setAttribute("autocomplete",authMode==="signin"?"current-password":"new-password");setAccountMessage(authMode==="signup"?"Create an account with your email and a password. Check your email if confirmation is required.":"Sign in to sync your collector data.");});

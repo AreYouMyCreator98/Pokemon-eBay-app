@@ -135,3 +135,29 @@ body.filters-open{overflow:hidden}
 .spotlight-price-caption{display:block;margin:0 0 2px;font-size:10px;line-height:1.3;font-weight:850;letter-spacing:1.25px;color:#bbdbff}
 .spotlight-price{min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
 @media(max-width:520px){.spotlight-price-caption{font-size:9px;letter-spacing:.8px;margin-bottom:1px}}
+
+/* TCG cross-game discovery and 5–10-minute auction radar */
+.tcg-feed-controls{position:relative;overflow:hidden;isolation:isolate;margin:17px 0 0;padding:15px 17px;border:1px solid #825bca78;border-radius:17px;background:radial-gradient(ellipse at top right,#53358a4d,transparent 58%),linear-gradient(115deg,#151531,#101f3b 85%);box-shadow:inset 0 1px 0 #ffffff16,0 9px 28px #0003}
+.tcg-feed-controls:before{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 25%,#56d9ff0d 50%,transparent 70%);pointer-events:none}
+.tcg-feed-heading{display:flex;justify-content:space-between;align-items:center;gap:14px;position:relative;z-index:1}
+.tcg-feed-heading>div{min-width:0}
+.tcg-feed-overline{display:block;color:#7de4ff;font-weight:900;font-size:9px;letter-spacing:1.7px;margin-bottom:3px}
+.tcg-feed-heading strong{display:block;font-size:clamp(15px,2vw,19px);color:#f7f3ff;letter-spacing:.1px;line-height:1.3}
+.tcg-feed-heading p{font-size:11px;color:#afb8dc;margin:3px 0 0}
+.tcg-feed-arrows{display:flex;align-items:center;gap:7px;flex:none}
+.tcg-feed-arrows button{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;border:1px solid #9b78db7e;background:linear-gradient(120deg,#322057,#14284d);color:#e9f6ff;font-size:25px;line-height:1;cursor:pointer;transition:filter .2s,transform .2s}
+.tcg-feed-arrows button:hover:not(:disabled){filter:brightness(1.35);transform:translateY(-1px)}
+.tcg-feed-arrows button:disabled{opacity:.35;cursor:not-allowed}
+#discoverPageLabel{font-weight:800;min-width:40px;text-align:center;color:#cae4ff;font-size:10px;font-variant-numeric:tabular-nums}
+.tcg-game-chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px;position:relative;z-index:1}
+.tcg-game-chips button{min-height:36px;padding:7px 12px;border:1px solid #715baf8e;border-radius:99px;color:#bac9eb;background:#131a36;font-size:11px;font-weight:800;white-space:nowrap;cursor:pointer;transition:filter .18s,border-color .18s,background .18s,box-shadow .18s}
+.tcg-game-chips button.active,.tcg-game-chips button[aria-pressed=true]{border-color:#ce96ff;background:linear-gradient(115deg,#6335af,#26488b);box-shadow:0 0 13px #a559ff60;color:#fff}
+.tcg-game-chips button:hover{filter:brightness(1.22);border-color:#8fd8ff}
+.tcg-game-chips button:focus-visible,.tcg-feed-arrows button:focus-visible,.tcg-feed-refresh:focus-visible{outline:2px solid #80ebff;outline-offset:3px}
+.tcg-window-chips button{min-width:120px}
+.tcg-feed-refresh{border:1px solid #9b78db94;background:linear-gradient(125deg,#3f2c7c,#16416d);border-radius:10px;min-height:39px;padding:8px 13px;color:#f5eaff;font-weight:800;font-size:11px;white-space:nowrap;cursor:pointer}
+.tcg-feed-refresh:hover{filter:brightness(1.25)}
+.tcg-product-label{display:inline-flex;align-self:flex-start;margin-bottom:5px;padding:2px 8px;border:1px solid #a678ec6b;border-radius:7px;background:linear-gradient(115deg,#302056cc,#14284bcc);color:#aadeff;font-size:9px;line-height:1.5;font-weight:850;letter-spacing:.35px}
+@media(max-width:600px){.tcg-feed-controls{padding:12px 11px;border-radius:14px;margin-top:12px}.tcg-feed-heading{gap:6px}.tcg-feed-heading strong{font-size:15px}.tcg-feed-heading p{font-size:10px;line-height:1.35}.tcg-feed-arrows{gap:3px}.tcg-feed-arrows button{width:31px;height:34px}.tcg-game-chips{flex-wrap:nowrap;gap:6px;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;padding:4px 1px 8px;margin-bottom:-5px}.tcg-game-chips::-webkit-scrollbar{display:none}.tcg-game-chips button{font-size:10px;min-height:35px;padding:7px 10px;flex:none}.tcg-feed-refresh{font-size:10px;min-height:36px;padding:7px 10px}.tcg-product-label{font-size:8px}}
+@media(max-width:380px){.tcg-feed-heading strong{font-size:13px}.tcg-feed-arrows button{width:27px;height:32px}.tcg-feed-overline{letter-spacing:.9px;font-size:8px}#discoverPageLabel{min-width:29px;font-size:9px}}
+@media(prefers-reduced-motion:reduce){.tcg-game-chips button,.tcg-feed-arrows button{transition:none!important}}

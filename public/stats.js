@@ -85,7 +85,7 @@ function listingCard(item,currency){
   '<div class="stats-listing-details"><span class="stats-listing-type">'+esc(grade)+'</span>'+
   '<h4 title="'+title+'">'+title+'</h4>'+
   '<p>'+esc(item.condition||"Condition not provided")+'</p>'+
-  '<div class="stats-listing-bottom"><strong>'+money(Number(item.price),item.currency||currency)+'</strong>'+
+  '<div class="stats-listing-bottom"><strong>'+(validPrice(item)?money(Number(item.price),item.currency||currency):"Price unavailable")+'</strong>'+
   '<a href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" aria-label="View '+title+' on eBay">View on eBay ↗</a></div></div></article>';
 }
 async function searchPrices(event){

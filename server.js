@@ -2,6 +2,7 @@ import http from "node:http";
 import { deletionChallenge } from "./ebay-deletion.js";
 import { makeSearchPlan, scoreSearchItem } from "./smart-search.js";
 import { classifyTCGListing } from "./tcg-only.js";
+import { priceBounds, itemInPriceRange, sortByListingPrice } from "./public/price-range.js";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,7 +49,9 @@ async function searchEbay(params) {
   const limit=Math.min(50,Math.max(1,Number(params.get("limit")||24)));
   const type=clean(params.get("type")||"ALL",20).toUpperCase();
   if(!["ALL","FIXED","AUCTION"].includes(type))throw new Error("Unsupported listing type.");
-  const sort=params.get("sort")==="newlyListed"?"newlyListed":"endingSoonest";
+  const sort=["endingSoonest","newlyListed","priceAsc","priceDesc"].includes(params.get("sort"))?params.get("sort"):"endingSoonest";
+  const ebaySort=sort==="priceAsc"?"price":sort==="priceDesc"?"-price":sort;
+  const bounds=priceBounds({minPrice:params.get("minPrice"),maxPrice:params.get("maxPrice")});
   const smart=params.get("smart")!=="0";
   const filters=[];
   const shipFrom=clean(params.get("shipFrom")||"ANY",3).toUpperCase();
@@ -61,14 +64,15 @@ async function searchEbay(params) {
   if(type==="AUCTION")filters.push("buyingOptions:{AUCTION}");
   if(type==="FIXED")filters.push("buyingOptions:{FIXED_PRICE}");
   if(type==="ALL")filters.push("buyingOptions:{AUCTION|FIXED_PRICE}");
-  const min=Number(params.get("minPrice")),max=Number(params.get("maxPrice"));
-  if(Number.isFinite(min)&&params.has("minPrice")&&min>=0)filters.push("price:["+min+".."+(Number.isFinite(max)&&params.has("maxPrice")&&max>=min?max:"")+"]");
-  else if(Number.isFinite(max)&&params.has("maxPrice")&&max>=0)filters.push("price:[.."+max+"]");
+  if(bounds.active){
+    filters.push("price:["+(bounds.minCents===null?"":bounds.minCents/100)+".."+(bounds.maxCents===null?"":bounds.maxCents/100)+"]");
+    filters.push("priceCurrency:"+market.currency);
+  }
   const plan=makeSearchPlan(q);
   const token=await ebayToken();
   const seen=new Set(),found=[],attempts=[],target=Math.min(limit,12);
   async function requestVariant(keywords){
-    const query=new URLSearchParams({q:keywords,limit:String(limit),sort,auto_correct:"KEYWORD",category_ids:"2536"});
+    const query=new URLSearchParams({q:keywords,limit:String(limit),sort:ebaySort,auto_correct:"KEYWORD",category_ids:"2536"});
     if(filters.length)query.set("filter",filters.join(","));
     const response=await fetch("https://api.ebay.com/buy/browse/v1/item_summary/search?"+query,{headers:{Authorization:"Bearer "+token,"X-EBAY-C-MARKETPLACE-ID":market.id,Accept:"application/json"}});
     const data=await response.json();
@@ -90,7 +94,9 @@ async function searchEbay(params) {
       const amount=auction?item.currentBidPrice||(item.bidCount===0?item.minimumPriceToBid:null)||item.price:item.price||item.currentBidPrice;
       const value=amount?.value;
       const price=value!==undefined&&value!==null&&value!==""&&Number.isFinite(Number(value))?Number(value):null;
-      found.push({id:item.itemId,title:item.title,productType,image:item.image?.imageUrl||item.thumbnailImages?.[0]?.imageUrl||"",price,currency:amount?.currency||market.currency,condition:item.condition||"Condition not supplied",location:item.itemLocation?.city||item.itemLocation?.country||"Location not supplied",shipFrom:item.itemLocation?.country||"",seller:item.seller?.username||"Seller details on eBay",sellerFeedback:item.seller?.feedbackPercentage||null,endTime:item.itemEndDate||null,bids:item.bidCount??null,buyingOptions:item.buyingOptions||[],url:item.itemWebUrl||"",marketplace:key,_relevance:relevance,_variant:attempts.length-1});
+      const listingCurrency=amount?.currency||market.currency;
+      if(!itemInPriceRange({price,currency:listingCurrency},bounds,market.currency))continue;
+      found.push({id:item.itemId,title:item.title,productType,image:item.image?.imageUrl||item.thumbnailImages?.[0]?.imageUrl||"",price,currency:listingCurrency,condition:item.condition||"Condition not supplied",location:item.itemLocation?.city||item.itemLocation?.country||"Location not supplied",shipFrom:item.itemLocation?.country||"",seller:item.seller?.username||"Seller details on eBay",sellerFeedback:item.seller?.feedbackPercentage||null,endTime:item.itemEndDate||null,bids:item.bidCount??null,buyingOptions:item.buyingOptions||[],url:item.itemWebUrl||"",marketplace:key,_relevance:relevance,_variant:attempts.length-1});
     }
     return data;
   }
@@ -103,11 +109,11 @@ async function searchEbay(params) {
       try{await requestVariant(variant);}catch(error){console.warn("eBay fallback query unavailable",error.message);}
     }
   }
-  if(smart&&attempts.length>1){
+  if(smart&&attempts.length>1&&sort!=="priceAsc"&&sort!=="priceDesc"){
     found.sort((a,b)=>b._relevance-a._relevance||a._variant-b._variant||
      (sort==="newlyListed"?0:new Date(a.endTime||8640000000000000)-new Date(b.endTime||8640000000000000)));
   }
-  const items=found.slice(0,limit).map(({_relevance,_variant,...item})=>item);
+  const items=sortByListingPrice(found,sort,market.currency).slice(0,limit).map(({_relevance,_variant,...item})=>item);
   return {items,total:items.length,marketplace:key,currency:market.currency,source:"eBay Browse API",fetchedAt:new Date().toISOString(),
    searchMeta:{query:q,corrected:primary.autoCorrections?.q||null,interpretedAs:plan.spellingChanged?plan.canonical:null,expanded:attempts.length>1,alternatives:attempts.length>1?attempts.slice(1):[],matches:items.length}};
 }

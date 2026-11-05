@@ -15,22 +15,23 @@ const EXCLUDED=/\b(?:healing crystals?|crystal healing|crystal balls?|raw crysta
 const CARDS_EXPLICIT=/\b(?:trading cards?|card game|tcg|ccg|booster|deck|binder|card sleeves?|toploaders?|card storage|graded cards?|sealed cards?|psa|bgs|cgc)\b/;
 
 export function classifyTCGListing(item){
- const title=norm(item?.title);
+ const raw=String(item?.title||""),title=norm(raw);
  if(!title)return null;
  // A misleading "prismatic" adjective is not a TCG identifier.
  if(EXCLUDED.test(title))return null;
  const franchise=TCG_FRANCHISE.test(title),tcgLabel=TCG_TERMS.test(title),knownSet=KNOWN_SETS.test(title);
  const grade=GRADER.test(title),accessory=ACCESSORY.test(title),collectible=COLLECTIBLE.test(title);
- const sealed=SEALED.test(title),card=CARD_SIGNALS.test(title),number=CARD_NUMBER.test(title);
+ const sealed=SEALED.test(title),card=CARD_SIGNALS.test(title),number=CARD_NUMBER.test(raw);
  const cardContext=franchise||tcgLabel||knownSet||grade||(number&&card);
  const accessoryContext=franchise||tcgLabel||/\b(?:cards?|deck|slab|grading|pocket|protectors?|collectors?)\b/.test(title)||
    /\b(?:ultra pro|dragon shield|gamegenic|vault x|ultimate guard|palms off gaming|palms off|bcw)\b/.test(title);
  // Explicit TCG goods can have short seller titles, but generic descriptive
  // words ("sealed", "display", "crystal") alone are never enough.
+ const protectiveDisplay=/\b(?:acrylic|protector|protective|magnetic|card holder|card stand|storage case|outer case|outer box)\b/.test(title);
+ if(sealed&&(cardContext||/\b(?:trading cards?|card game|tcg|ccg)\b/.test(title))&&!protectiveDisplay)return "SEALED";
  if(accessory&&accessoryContext)return "ACCESSORIES";
  if(collectible&&(franchise||tcgLabel||knownSet))return "ACCESSORIES";
  if(COLLECTION_WITH_CARDS.test(title)&&(franchise||tcgLabel||knownSet))return "ACCESSORIES";
- if(sealed&&(cardContext||/\b(?:trading cards?|card game|tcg|ccg)\b/.test(title)))return "SEALED";
  if(grade&&cardContext)return "GRADED";
  if(card&&(cardContext||number))return "RAW";
  if(franchise&&number)return "RAW";

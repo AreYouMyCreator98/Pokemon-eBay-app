@@ -66,3 +66,39 @@ test("keeps prismatic bundle search relevant while excluding unrelated products"
 test("retains cards named after crystals when they are genuine trading cards",()=>{
  assert.equal(classifyTCGListing({title:"Pokemon Crystal Guardians Charizard 4/100 Holo Card"}),"RAW");
 });
+
+test("understands heavily misspelled Prismatic bundle display searches",()=>{
+ const examples=[
+  "Primastc display bundles",
+  "primastic display bundle",
+  "prismatc dispay bundels",
+  "Primasctic display bundle",
+  "prismatic display bundles",
+  "prsimatic bundle display"
+ ];
+ for(const query of examples){
+  const plan=makeSearchPlan(query);
+  assert.equal(plan.queries[0]==="prismatic evolutions booster bundle display"||
+   plan.queries.includes("prismatic evolutions booster bundle display"),true,query);
+  assert.ok(plan.queries.some(x=>x.includes("prismatic evolutions booster bundle")),query);
+  const display={title:"Pokemon Prismatic Evolutions Booster Bundle Display Box 10 Bundles"};
+  const single={title:"Pokemon Prismatic Evolutions Booster Bundle - 6 Packs"};
+  const wrong={title:"Pokemon Prismatic Evolutions Elite Trainer Box"};
+  assert.ok(scoreSearchItem(display,plan)>scoreSearchItem(single,plan),query);
+  assert.ok(scoreSearchItem(display,plan)>0,query);
+  assert.ok(scoreSearchItem(wrong,plan)<0,query);
+  assert.equal(classifyTCGListing({title:"Prismatic Crystal Geode Display Bundle"}),null,query);
+ }
+});
+test("retains unrelated game/set identifiers and product types when correcting typos",()=>{
+ const cases=[
+  ["One Piece OP06 booster box","one piece op06 booster box"],
+  ["Pokemon 151 booster bundles","pokemon 151 booster bundle"],
+  ["Umbreon PSA 10","umbreon psa 10"],
+  ["TCG binder","tcg binder"]
+ ];
+ for(const [input,meaning] of cases){
+  const plan=makeSearchPlan(input);
+  assert.ok(plan.queries.some(x=>x.toLowerCase()===meaning),input);
+ }
+});

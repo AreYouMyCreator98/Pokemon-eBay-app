@@ -19,9 +19,9 @@ function ebayUrl(raw){try{const u=new URL(String(raw||""));return u.protocol==="
 function percent(n,denominator){return denominator?Math.round(100*n/denominator):0;}
 function median(values){if(!values.length)return null;const sorted=[...values].sort((a,b)=>a-b),half=Math.floor(sorted.length/2);return sorted.length%2?sorted[half]:(sorted[half-1]+sorted[half])/2;}
 function displayStatus(el,message,error=false){el.textContent=message;el.classList.toggle("stats-error",error);}
-function paramsFor(query,marketplace,limit=40){return new URLSearchParams({q:query,marketplace,type:"FIXED",sort:"newlyListed",limit:String(limit)});}
-async function fetchListings(query,marketplace,limit=40){
- const response=await fetch("/api/search?"+paramsFor(query,marketplace,limit));
+function paramsFor(query,marketplace,limit=40,smart=true){return new URLSearchParams({q:query,marketplace,type:"FIXED",sort:"newlyListed",limit:String(limit),smart:smart?"1":"0"}); }
+async function fetchListings(query,marketplace,limit=40,smart=true){
+ const response=await fetch("/api/search?"+paramsFor(query,marketplace,limit,smart));
  let data;try{data=await response.json();}catch{throw Error("Could not read the eBay search response.");}
  if(!response.ok)throw Error(data.error||"The eBay listing feed is unavailable.");
  return (data.items||[]).filter(item=>item&&isFixed(item)&&ebayUrl(item.url));
@@ -38,7 +38,7 @@ async function loadMarketMix(){
  button.disabled=true;
  displayStatus($("#mixStatus"),"Sampling current Buy It Now listings across four trading-card games…");
  try{
-  const responses=await Promise.allSettled(FEEDS.map(async feed=>({feed,items:await fetchListings(feed.q,marketplace,30)})));
+  const responses=await Promise.allSettled(FEEDS.map(async feed=>({feed,items:await fetchListings(feed.q,marketplace,30,false)})));
   if(requestId!==sampleRequestId)return;
   const failures=responses.filter(r=>r.status==="rejected").length;
   if(failures===FEEDS.length)throw Error("No live eBay feeds are available. Check your connection and refresh.");

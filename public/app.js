@@ -1,5 +1,5 @@
 const $=s=>document.querySelector(s);
-const state={tab:"discover",items:[],query:"",watchlist:load("pokemarket-watchlist",[]),savedSearches:load("pokemarket-searches",[]),alerted:load("pokemarket-alerted",[])};
+const state={tab:"discover",items:[],query:"",watchlist:load("pokemarket-watchlist",[]),savedSearches:load("pokemarket-searches",[]).map(x=>typeof x==="string"?{id:x,query:x,marketplace:"AU",type:"ALL",sort:"endingSoonest",minPrice:"",maxPrice:""}:x),alerted:load("pokemarket-alerted",[])};
 function load(key,fallback){try{return JSON.parse(localStorage.getItem(key))??fallback;}catch{return fallback;}}
 function save(key,value){localStorage.setItem(key,JSON.stringify(value));}
 function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
@@ -9,7 +9,7 @@ function isSaved(item){return state.watchlist.some(x=>x&&typeof x==="object"&&x.
 function visibleItems(){if(state.tab==="watchlist")return state.watchlist.filter(x=>x&&typeof x==="object");if(state.tab==="ending")return [...state.items].sort((a,b)=>new Date(a.endTime||8640000000000000)-new Date(b.endTime||8640000000000000));return state.items;}
 function renderSavedSearches(){
  const host=$("#savedSearchTags");if(!host)return;
- host.innerHTML=state.savedSearches.map(q=>'<button class="tag" data-saved-query="'+esc(q)+'">'+esc(q)+' ↗</button>').join("");
+ host.innerHTML=state.savedSearches.map((s,i)=>'<button class="tag" data-saved-index="'+i+'">'+esc(s.query)+' · '+esc(s.marketplace)+' · '+esc(s.type)+' ↗</button>').join("");
 }
 function render(){
  $("#watchCount").textContent=state.watchlist.length;renderSavedSearches();
@@ -38,12 +38,12 @@ async function search(){
 document.addEventListener("click",event=>{
  const tab=event.target.closest("[data-tab]");if(tab){state.tab=tab.dataset.tab;document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===tab));if(state.tab==="sold")$("#status").textContent="Sold-history access is not enabled until an approved eBay data source is connected.";render();return;}
  const watch=event.target.closest("[data-watch]");if(watch){const id=watch.dataset.watch;const existing=state.watchlist.find(x=>x&&typeof x==="object"&&x.id===id);if(existing)state.watchlist=state.watchlist.filter(x=>!x||typeof x!=="object"||x.id!==id);else{const item=[...state.items,...state.watchlist].find(x=>x&&x.id===id);if(item)state.watchlist.push(item);}save("pokemarket-watchlist",state.watchlist);render();return;}
- const saved=event.target.closest("[data-saved-query]");if(saved){$("#searchInput").value=saved.dataset.savedQuery;state.tab="discover";document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.tab==="discover"));search();return;}
+ const saved=event.target.closest("[data-saved-index]");if(saved){const s=state.savedSearches[Number(saved.dataset.savedIndex)];if(s){$("#searchInput").value=s.query;$("#marketplace").value=s.marketplace;$("#listingType").value=s.type;$("#sortBy").value=s.sort;$("#minPrice").value=s.minPrice;$("#maxPrice").value=s.maxPrice;state.tab="discover";document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.tab==="discover"));search();}return;}
  const tag=event.target.closest("[data-query]");if(tag){$("#searchInput").value=tag.dataset.query;search();}
 });
 $("#searchBtn").addEventListener("click",search);$("#searchInput").addEventListener("keydown",e=>{if(e.key==="Enter")search();});
 ["marketplace","listingType","sortBy","minPrice","maxPrice"].forEach(id=>$("#"+id).addEventListener("change",()=>{if(state.query)search();}));
-$("#saveSearchBtn").addEventListener("click",()=>{const q=$("#searchInput").value.trim();if(!q){$("#status").textContent="Search for something first, then save that search.";return;}if(!state.savedSearches.includes(q)){state.savedSearches.unshift(q);state.savedSearches=state.savedSearches.slice(0,12);save("pokemarket-searches",state.savedSearches);renderSavedSearches();}$("#status").textContent="Saved search on this device: "+q;});
+$("#saveSearchBtn").addEventListener("click",()=>{const q=$("#searchInput").value.trim();if(!q){$("#status").textContent="Search for something first, then save that search.";return;}const item={id:[q,$("#marketplace").value,$("#listingType").value,$("#sortBy").value,$("#minPrice").value,$("#maxPrice").value].join("|"),query:q,marketplace:$("#marketplace").value,type:$("#listingType").value,sort:$("#sortBy").value,minPrice:$("#minPrice").value,maxPrice:$("#maxPrice").value};state.savedSearches=state.savedSearches.filter(s=>s.id!==item.id);state.savedSearches.unshift(item);state.savedSearches=state.savedSearches.slice(0,12);save("pokemarket-searches",state.savedSearches);renderSavedSearches();$("#status").textContent="Saved complete search and filters on this device: "+q;});
 $("#notifyBtn").addEventListener("click",async()=>{if(!("Notification"in window)){ $("#status").textContent="This browser does not support notifications.";return;}const permission=await Notification.requestPermission();$("#status").textContent=permission==="granted"?"Auction alerts enabled while POKÉMARKET is open. Watchlisted auctions ending within 10 minutes will trigger a reminder.":"Notifications were not enabled.";});
 function checkAlerts(){
  if(!("Notification"in window)||Notification.permission!=="granted")return;

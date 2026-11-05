@@ -1,6 +1,7 @@
 import http from "node:http";
 import { deletionChallenge } from "./ebay-deletion.js";
 import { makeSearchPlan, scoreSearchItem } from "./smart-search.js";
+import { classifyTCGListing } from "./tcg-only.js";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -67,7 +68,7 @@ async function searchEbay(params) {
   const token=await ebayToken();
   const seen=new Set(),found=[],attempts=[],target=Math.min(limit,12);
   async function requestVariant(keywords){
-    const query=new URLSearchParams({q:keywords,limit:String(limit),sort,auto_correct:"KEYWORD"});
+    const query=new URLSearchParams({q:keywords,limit:String(limit),sort,auto_correct:"KEYWORD",category_ids:"2536"});
     if(filters.length)query.set("filter",filters.join(","));
     const response=await fetch("https://api.ebay.com/buy/browse/v1/item_summary/search?"+query,{headers:{Authorization:"Bearer "+token,"X-EBAY-C-MARKETPLACE-ID":market.id,Accept:"application/json"}});
     const data=await response.json();
@@ -76,6 +77,11 @@ async function searchEbay(params) {
     for(const item of data.itemSummaries||[]){
       const id=String(item.itemId||item.itemWebUrl||"");
       if(!id||seen.has(id))continue;
+      // Mandatory on every feed, including smart:false discovery and Stats.
+      // Category 2536 = CCG cards, sealed products and card-game supplies;
+      // the classifier also rejects non-TCG items miscategorised by sellers.
+      const productType=classifyTCGListing(item);
+      if(!productType)continue;
       const relevance=scoreSearchItem(item,plan);
       if(smart&&relevance<0)continue;
       if(smart&&keywords!==plan.queries[0]&&relevance<25)continue;
@@ -84,7 +90,7 @@ async function searchEbay(params) {
       const amount=auction?item.currentBidPrice||(item.bidCount===0?item.minimumPriceToBid:null)||item.price:item.price||item.currentBidPrice;
       const value=amount?.value;
       const price=value!==undefined&&value!==null&&value!==""&&Number.isFinite(Number(value))?Number(value):null;
-      found.push({id:item.itemId,title:item.title,image:item.image?.imageUrl||item.thumbnailImages?.[0]?.imageUrl||"",price,currency:amount?.currency||market.currency,condition:item.condition||"Condition not supplied",location:item.itemLocation?.city||item.itemLocation?.country||"Location not supplied",shipFrom:item.itemLocation?.country||"",seller:item.seller?.username||"Seller details on eBay",sellerFeedback:item.seller?.feedbackPercentage||null,endTime:item.itemEndDate||null,bids:item.bidCount??null,buyingOptions:item.buyingOptions||[],url:item.itemWebUrl||"",marketplace:key,_relevance:relevance,_variant:attempts.length-1});
+      found.push({id:item.itemId,title:item.title,productType,image:item.image?.imageUrl||item.thumbnailImages?.[0]?.imageUrl||"",price,currency:amount?.currency||market.currency,condition:item.condition||"Condition not supplied",location:item.itemLocation?.city||item.itemLocation?.country||"Location not supplied",shipFrom:item.itemLocation?.country||"",seller:item.seller?.username||"Seller details on eBay",sellerFeedback:item.seller?.feedbackPercentage||null,endTime:item.itemEndDate||null,bids:item.bidCount??null,buyingOptions:item.buyingOptions||[],url:item.itemWebUrl||"",marketplace:key,_relevance:relevance,_variant:attempts.length-1});
     }
     return data;
   }

@@ -1,5 +1,6 @@
 import http from "node:http";
 import { deletionChallenge } from "./ebay-deletion.js";
+import { makeSearchPlan, scoreSearchItem } from "./smart-search.js";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -41,11 +42,13 @@ async function ebayToken() {
 async function searchEbay(params) {
   const key=clean(params.get("marketplace")||"AU",2).toUpperCase(),market=MARKETPLACES[key];
   if(!market)throw new Error("Unsupported marketplace. Choose AU or US.");
-  const q=clean(params.get("q"));
+  const q=clean(params.get("q"),100);
   if(!q)return {items:[],total:0,marketplace:key,currency:market.currency};
   const limit=Math.min(50,Math.max(1,Number(params.get("limit")||24)));
   const type=clean(params.get("type")||"ALL",20).toUpperCase();
+  if(!["ALL","FIXED","AUCTION"].includes(type))throw new Error("Unsupported listing type.");
   const sort=params.get("sort")==="newlyListed"?"newlyListed":"endingSoonest";
+  const smart=params.get("smart")!=="0";
   const filters=[];
   const shipFrom=clean(params.get("shipFrom")||"ANY",3).toUpperCase();
   const allowedOrigins=new Set(["ANY","AU","US","JP","GB","CA","NZ","DE","FR","KR","CN","IT","ES"]);
@@ -56,17 +59,51 @@ async function searchEbay(params) {
   if(shipsTo!=="ANY")filters.push("deliveryCountry:"+shipsTo);
   if(type==="AUCTION")filters.push("buyingOptions:{AUCTION}");
   if(type==="FIXED")filters.push("buyingOptions:{FIXED_PRICE}");
+  if(type==="ALL")filters.push("buyingOptions:{AUCTION|FIXED_PRICE}");
   const min=Number(params.get("minPrice")),max=Number(params.get("maxPrice"));
   if(Number.isFinite(min)&&params.has("minPrice")&&min>=0)filters.push("price:["+min+".."+(Number.isFinite(max)&&params.has("maxPrice")&&max>=min?max:"")+"]");
   else if(Number.isFinite(max)&&params.has("maxPrice")&&max>=0)filters.push("price:[.."+max+"]");
-  const query=new URLSearchParams({q,limit:String(limit),sort});
-  if(filters.length)query.set("filter",filters.join(","));
+  const plan=makeSearchPlan(q);
   const token=await ebayToken();
-  const response=await fetch("https://api.ebay.com/buy/browse/v1/item_summary/search?"+query,{headers:{Authorization:"Bearer "+token,"X-EBAY-C-MARKETPLACE-ID":market.id,Accept:"application/json"}});
-  const data=await response.json();
-  if(!response.ok)throw new Error(data.errors?.[0]?.message||"eBay search request failed ("+response.status+").");
-  const items=(data.itemSummaries||[]).map(item=>{const auction=(item.buyingOptions||[]).includes("AUCTION");const amount=(auction?item.currentBidPrice||(item.bidCount===0?item.minimumPriceToBid:null)||item.price:item.price||item.currentBidPrice);const value=amount?.value;const price=value!==undefined&&value!==null&&value!==""&&Number.isFinite(Number(value))?Number(value):null;return {id:item.itemId,title:item.title,image:item.image?.imageUrl||item.thumbnailImages?.[0]?.imageUrl||"",price,currency:amount?.currency||market.currency,condition:item.condition||"Condition not supplied",location:item.itemLocation?.city||item.itemLocation?.country||"Location not supplied",shipFrom:item.itemLocation?.country||"",seller:item.seller?.username||"Seller details on eBay",sellerFeedback:item.seller?.feedbackPercentage||null,endTime:item.itemEndDate||null,bids:item.bidCount??null,buyingOptions:item.buyingOptions||[],url:item.itemWebUrl||"",marketplace:key};});
-  return {items,total:data.total||items.length,marketplace:key,currency:market.currency,source:"eBay Browse API",fetchedAt:new Date().toISOString()};
+  const seen=new Set(),found=[],attempts=[],target=Math.min(limit,12);
+  async function requestVariant(keywords){
+    const query=new URLSearchParams({q:keywords,limit:String(limit),sort,auto_correct:"KEYWORD"});
+    if(filters.length)query.set("filter",filters.join(","));
+    const response=await fetch("https://api.ebay.com/buy/browse/v1/item_summary/search?"+query,{headers:{Authorization:"Bearer "+token,"X-EBAY-C-MARKETPLACE-ID":market.id,Accept:"application/json"}});
+    const data=await response.json();
+    if(!response.ok)throw new Error(data.errors?.[0]?.message||"eBay search request failed ("+response.status+").");
+    attempts.push(keywords);
+    for(const item of data.itemSummaries||[]){
+      const id=String(item.itemId||item.itemWebUrl||"");
+      if(!id||seen.has(id))continue;
+      const relevance=scoreSearchItem(item,plan);
+      if(smart&&relevance<0)continue;
+      if(smart&&keywords!==plan.queries[0]&&relevance<25)continue;
+      seen.add(id);
+      const auction=(item.buyingOptions||[]).includes("AUCTION");
+      const amount=auction?item.currentBidPrice||(item.bidCount===0?item.minimumPriceToBid:null)||item.price:item.price||item.currentBidPrice;
+      const value=amount?.value;
+      const price=value!==undefined&&value!==null&&value!==""&&Number.isFinite(Number(value))?Number(value):null;
+      found.push({id:item.itemId,title:item.title,image:item.image?.imageUrl||item.thumbnailImages?.[0]?.imageUrl||"",price,currency:amount?.currency||market.currency,condition:item.condition||"Condition not supplied",location:item.itemLocation?.city||item.itemLocation?.country||"Location not supplied",shipFrom:item.itemLocation?.country||"",seller:item.seller?.username||"Seller details on eBay",sellerFeedback:item.seller?.feedbackPercentage||null,endTime:item.itemEndDate||null,bids:item.bidCount??null,buyingOptions:item.buyingOptions||[],url:item.itemWebUrl||"",marketplace:key,_relevance:relevance,_variant:attempts.length-1});
+    }
+    return data;
+  }
+  const primary=await requestVariant(plan.queries[0]);
+  if(smart&&found.length<target){
+    // The official API treats space-separated words as AND. Try related queries
+    // only if the exact keywords returned too few relevant results.
+    for(const variant of plan.queries.slice(1,5)){
+      if(found.length>=target)break;
+      try{await requestVariant(variant);}catch(error){console.warn("eBay fallback query unavailable",error.message);}
+    }
+  }
+  if(smart&&attempts.length>1){
+    found.sort((a,b)=>b._relevance-a._relevance||a._variant-b._variant||
+     (sort==="newlyListed"?0:new Date(a.endTime||8640000000000000)-new Date(b.endTime||8640000000000000)));
+  }
+  const items=found.slice(0,limit).map(({_relevance,_variant,...item})=>item);
+  return {items,total:items.length,marketplace:key,currency:market.currency,source:"eBay Browse API",fetchedAt:new Date().toISOString(),
+   searchMeta:{query:q,corrected:primary.autoCorrections?.q||null,expanded:attempts.length>1,alternatives:attempts.length>1?attempts.slice(1):[],matches:items.length}};
 }
 const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,"http://localhost");

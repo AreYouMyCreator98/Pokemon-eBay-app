@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#090d18"><meta name="description" content="A read-only Pokémon trading card auction dashboard powered by eBay listings.">
+<link rel="manifest" href="/manifest.webmanifest"><link rel="stylesheet" href="/styles.css">
+<title>POKÉMARKET — Pokémon auction radar</title></head>
+<body><div class="app-shell">
+<header class="topbar"><a class="brand" href="/"><span class="brand-ball">◉</span><span>POKÉ<span>MARKET</span><small>THE COLLECTOR'S RADAR</small></span></a><div class="top-actions"><span class="live-pill"><i></i> EBAY LISTINGS</span><button class="icon-button" id="notifyBtn" title="Enable notifications" aria-label="Enable notifications">♧</button></div></header>
+<main>
+<section class="hero"><div class="hero-copy"><p class="eyebrow">THE HUNT STARTS HERE</p><h1>Find your next<br><em>big pull.</em></h1><p class="hero-sub">Track Pokémon auctions, compare listings and catch the ones ending soon.</p></div><div class="hero-orb" aria-hidden="true"><div class="orb-ring"></div><div class="orb-core">✦</div><span class="orb-caption">COLLECTOR<br>INTELLIGENCE</span></div></section>
+<section class="search-panel"><label class="search-label" for="searchInput">SEARCH THE MARKET</label><div class="search-row"><span class="search-icon">⌕</span><input id="searchInput" type="search" placeholder="Try Charizard, 151, Umbreon…" autocomplete="off"><button id="searchBtn" class="gold-button">Search <span>↗</span></button></div>
+<div class="filter-row"><label>Marketplace<select id="marketplace"><option value="AU">eBay Australia · AUD</option><option value="US">eBay US · USD</option></select></label><label>Listing type<select id="listingType"><option value="ALL">All listings</option><option value="AUCTION">Auctions</option><option value="FIXED">Buy It Now</option></select></label><label>Sort by<select id="sortBy"><option value="endingSoonest">Ending soonest</option><option value="newlyListed">Newly listed</option></select></label><label>Min price<input id="minPrice" type="number" min="0" step="0.01" placeholder="Any"></label><label>Max price<input id="maxPrice" type="number" min="0" step="0.01" placeholder="Any"></label></div>
+<div class="quick-tags"><button data-query="Charizard" class="tag">Charizard</button><button data-query="Umbreon" class="tag">Umbreon</button><button data-query="Pokemon 151" class="tag">151</button><button data-query="Pikachu" class="tag">Pikachu</button><button data-query="Vintage Pokemon" class="tag">Vintage</button></div></section>
+<nav class="tabs" aria-label="Listing sections"><button class="tab active" data-tab="discover">Discover</button><button class="tab" data-tab="ending">Ending soon</button><button class="tab" data-tab="watchlist">Watchlist <b id="watchCount">0</b></button><button class="tab" data-tab="sold">Sold history</button></nav>
+<section class="results-head"><div><p class="eyebrow" id="sectionEyebrow">LIVE MARKETPLACE</p><h2 id="sectionTitle">Featured listings</h2></div><span id="resultCount" class="result-count">Ready when you are</span></section>
+<div id="status" class="status" role="status">Search for a Pokémon card, sealed product or collection to see live eBay listings.</div><section id="listingGrid" class="listing-grid" aria-live="polite"></section>
+<section id="soldNotice" class="sold-notice hidden"><div class="notice-icon">◷</div><div><h3>Verified sold data isn't connected yet</h3><p>eBay's historical sold-listing access is restricted. We won't make up sale prices or scrape unverified data. This page will show verified sales once an approved data source is connected.</p></div></section>
+<section class="trust-strip"><span>↗ Opens original eBay listing</span><span>◈ Read-only dashboard</span><span>⌑ No in-app bidding or checkout</span></section></main>
+<footer><span>POKÉMARKET <b>© 2026</b></span><span>Independent collector tool · Not affiliated with eBay or Pokémon</span></footer>
+</div><script type="module" src="/app.js"></script></body></html>

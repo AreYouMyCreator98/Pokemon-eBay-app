@@ -47,6 +47,10 @@ async function searchEbay(params) {
   const type=clean(params.get("type")||"ALL",20).toUpperCase();
   const sort=params.get("sort")==="newlyListed"?"newlyListed":"endingSoonest";
   const filters=[];
+  const shipFrom=clean(params.get("shipFrom")||"ANY",3).toUpperCase();
+  const allowedOrigins=new Set(["ANY","AU","US","JP","GB","CA","NZ","DE","FR","KR","CN","IT","ES"]);
+  if(!allowedOrigins.has(shipFrom))throw new Error("Unsupported shipping origin.");
+  if(shipFrom!=="ANY")filters.push("itemLocationCountry:"+shipFrom);
   if(type==="AUCTION")filters.push("buyingOptions:{AUCTION}");
   if(type==="FIXED")filters.push("buyingOptions:{FIXED_PRICE}");
   const min=Number(params.get("minPrice")),max=Number(params.get("maxPrice"));
@@ -58,7 +62,7 @@ async function searchEbay(params) {
   const response=await fetch("https://api.ebay.com/buy/browse/v1/item_summary/search?"+query,{headers:{Authorization:"Bearer "+token,"X-EBAY-C-MARKETPLACE-ID":market.id,Accept:"application/json"}});
   const data=await response.json();
   if(!response.ok)throw new Error(data.errors?.[0]?.message||"eBay search request failed ("+response.status+").");
-  const items=(data.itemSummaries||[]).map(item=>({id:item.itemId,title:item.title,image:item.image?.imageUrl||item.thumbnailImages?.[0]?.imageUrl||"",price:item.price?.value?Number(item.price.value):null,currency:item.price?.currency||market.currency,condition:item.condition||"Condition not supplied",location:item.itemLocation?.city||item.itemLocation?.country||"Location not supplied",seller:item.seller?.username||"Seller details on eBay",sellerFeedback:item.seller?.feedbackPercentage||null,endTime:item.itemEndDate||null,bids:item.bidCount??null,buyingOptions:item.buyingOptions||[],url:item.itemWebUrl||"",marketplace:key}));
+  const items=(data.itemSummaries||[]).map(item=>({id:item.itemId,title:item.title,image:item.image?.imageUrl||item.thumbnailImages?.[0]?.imageUrl||"",price:item.price?.value?Number(item.price.value):null,currency:item.price?.currency||market.currency,condition:item.condition||"Condition not supplied",location:item.itemLocation?.city||item.itemLocation?.country||"Location not supplied",shipFrom:item.itemLocation?.country||"",seller:item.seller?.username||"Seller details on eBay",sellerFeedback:item.seller?.feedbackPercentage||null,endTime:item.itemEndDate||null,bids:item.bidCount??null,buyingOptions:item.buyingOptions||[],url:item.itemWebUrl||"",marketplace:key}));
   return {items,total:data.total||items.length,marketplace:key,currency:market.currency,source:"eBay Browse API",fetchedAt:new Date().toISOString()};
 }
 const server=http.createServer(async(req,res)=>{

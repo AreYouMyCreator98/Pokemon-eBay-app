@@ -1,7 +1,44 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
+const supabase=createClient("https://prxvxomflqzviqiktcgr.supabase.co","sb_publishable_WrQ8yUaSj-z6nsx_-r9FGw_e1CkhXtc");
 const $=s=>document.querySelector(s);
+let cloudUser=null,cloudReady=false,authMode="signin",syncBusy=false;
+function setAccountMessage(message,error=false){$("#accountMessage").textContent=message;$("#accountMessage").classList.toggle("error",error);}
+function openAccount(){$("#accountPanel").classList.remove("hidden");}
+function closeAccount(){$("#accountPanel").classList.add("hidden");}
+async function syncCollection(key,value){
+ if(!cloudUser||!cloudReady||syncBusy)return;syncBusy=true;
+ try{
+  if(key==="pokemarket-watchlist"){
+   const rows=value.filter(x=>x&&typeof x==="object"&&x.id).map(x=>({user_id:cloudUser.id,item_id:String(x.id),item_url:x.url||null,item_title:x.title||"",item_snapshot:x}));
+   const del=await supabase.from("user_watchlist").delete().eq("user_id",cloudUser.id);if(del.error)throw del.error;
+   if(rows.length){const ins=await supabase.from("user_watchlist").insert(rows);if(ins.error)throw ins.error;}
+  }else if(key==="pokemarket-searches"){
+   const rows=value.map(s=>({user_id:cloudUser.id,search_key:String(s.id),query:s.query,marketplace:s.marketplace,listing_type:s.type,sort_by:s.sort,min_price:s.minPrice===""?null:Number(s.minPrice),max_price:s.maxPrice===""?null:Number(s.maxPrice)}));
+   const del=await supabase.from("user_saved_searches").delete().eq("user_id",cloudUser.id);if(del.error)throw del.error;
+   if(rows.length){const ins=await supabase.from("user_saved_searches").insert(rows);if(ins.error)throw ins.error;}
+  }
+ }catch(error){setAccountMessage("Cloud sync issue: "+(error.message||"Please try again."),true);}finally{syncBusy=false;}
+}
+async function loadCloudData(user){
+ cloudReady=false;cloudUser=user;
+ const [w,s]=await Promise.all([supabase.from("user_watchlist").select("item_id,item_snapshot,created_at").eq("user_id",user.id).order("created_at",{ascending:false}),supabase.from("user_saved_searches").select("search_key,query,marketplace,listing_type,sort_by,min_price,max_price,created_at").eq("user_id",user.id).order("created_at",{ascending:false})]);
+ if(w.error)throw w.error;if(s.error)throw s.error;
+ const localWatch=state.watchlist.filter(x=>x&&typeof x==="object"),localSearch=state.savedSearches;
+ if(!w.data.length&&localWatch.length){const rows=localWatch.map(x=>({user_id:user.id,item_id:String(x.id),item_url:x.url||null,item_title:x.title||"",item_snapshot:x}));const m=await supabase.from("user_watchlist").upsert(rows,{onConflict:"user_id,item_id"});if(m.error)throw m.error;}
+ if(!s.data.length&&localSearch.length){const rows=localSearch.map(x=>({user_id:user.id,search_key:String(x.id),query:x.query,marketplace:x.marketplace,listing_type:x.type,sort_by:x.sort,min_price:x.minPrice===""?null:Number(x.minPrice),max_price:x.maxPrice===""?null:Number(x.maxPrice)}));const m=await supabase.from("user_saved_searches").upsert(rows,{onConflict:"user_id,search_key"});if(m.error)throw m.error;}
+ const [wr,sr]=await Promise.all([supabase.from("user_watchlist").select("item_snapshot").eq("user_id",user.id).order("created_at",{ascending:false}),supabase.from("user_saved_searches").select("search_key,query,marketplace,listing_type,sort_by,min_price,max_price").eq("user_id",user.id).order("created_at",{ascending:false})]);
+ if(wr.error)throw wr.error;if(sr.error)throw sr.error;
+ state.watchlist=wr.data.map(x=>x.item_snapshot).filter(Boolean);state.savedSearches=sr.data.map(x=>({id:x.search_key,query:x.query,marketplace:x.marketplace,type:x.listing_type,sort:x.sort_by,minPrice:x.min_price==null?"":String(x.min_price),maxPrice:x.max_price==null?"":String(x.max_price)}));
+ localStorage.setItem("pokemarket-watchlist",JSON.stringify(state.watchlist));localStorage.setItem("pokemarket-searches",JSON.stringify(state.savedSearches));
+ cloudReady=true;render();$("#accountTitle").textContent="Collector account";$("#accountEmail").textContent=user.email||"Signed in";$("#authForm").classList.add("hidden");$("#signedInActions").classList.remove("hidden");$("#accountBtn").textContent="My account";setAccountMessage("Your watchlist and saved searches are syncing across devices.");
+}
+async function handleAuthSession(session){
+ if(session?.user){try{await loadCloudData(session.user);}catch(error){cloudUser=session.user;cloudReady=false;setAccountMessage("Signed in, but cloud data could not load: "+error.message,true);}}
+ else{cloudUser=null;cloudReady=false;state.watchlist=[];state.savedSearches=[];localStorage.removeItem("pokemarket-watchlist");localStorage.removeItem("pokemarket-searches");$("#authForm").classList.remove("hidden");$("#signedInActions").classList.add("hidden");$("#accountTitle").textContent="Your account";$("#accountBtn").textContent="Sign in";setAccountMessage("Sign in to sync your watchlist and saved searches across devices.");render();}
+}
 const state={tab:"discover",items:[],query:"",watchlist:load("pokemarket-watchlist",[]),savedSearches:load("pokemarket-searches",[]).map(x=>typeof x==="string"?{id:x,query:x,marketplace:"AU",type:"ALL",sort:"endingSoonest",minPrice:"",maxPrice:""}:x),alerted:load("pokemarket-alerted",[])};
 function load(key,fallback){try{return JSON.parse(localStorage.getItem(key))??fallback;}catch{return fallback;}}
-function save(key,value){localStorage.setItem(key,JSON.stringify(value));}
+function save(key,value){localStorage.setItem(key,JSON.stringify(value));if(key==="pokemarket-watchlist"||key==="pokemarket-searches")void syncCollection(key,value);}
 function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function money(v,c){return v==null?"Price unavailable":new Intl.NumberFormat(undefined,{style:"currency",currency:c||"AUD",maximumFractionDigits:2}).format(v);}
 function remaining(end){if(!end)return"Time not supplied";const ms=new Date(end).getTime()-Date.now();if(!Number.isFinite(ms))return"Time not supplied";if(ms<=0)return"Ended";const d=Math.floor(ms/86400000),h=Math.floor(ms%86400000/3600000),m=Math.floor(ms%3600000/60000),s=Math.floor(ms%60000/1000);return d?d+"d "+h+"h left":h?h+"h "+m+"m left":m+"m "+s+"s left";}
@@ -52,3 +89,9 @@ function checkAlerts(){
 }
 if("serviceWorker"in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));
 state.items=load("pokemarket-last-items",[]);render();setInterval(()=>{document.querySelectorAll("[data-end]").forEach(el=>el.textContent=remaining(el.dataset.end));checkAlerts();},15000);
+
+$("#accountBtn").addEventListener("click",openAccount);$("#accountClose").addEventListener("click",closeAccount);
+$("#authToggle").addEventListener("click",()=>{authMode=authMode==="signin"?"signup":"signin";$("#authSubmit").textContent=authMode==="signin"?"Sign in":"Create account";$("#authToggle").textContent=authMode==="signin"?"Create account":"Back to sign in";$("#authPassword").setAttribute("autocomplete",authMode==="signin"?"current-password":"new-password");setAccountMessage(authMode==="signup"?"Create an account with your email and a password. Check your email if confirmation is required.":"Sign in to sync your collector data.");});
+$("#authForm").addEventListener("submit",async event=>{event.preventDefault();const email=$("#authEmail").value.trim(),password=$("#authPassword").value;$("#authSubmit").disabled=true;try{const result=authMode==="signup"?await supabase.auth.signUp({email,password}):await supabase.auth.signInWithPassword({email,password});if(result.error)throw result.error;if(authMode==="signup"&&!result.data.session){setAccountMessage("Account created. Check your email for the confirmation link, then come back and sign in.");}else if(result.data.session){await handleAuthSession(result.data.session);}}catch(error){setAccountMessage(error.message||"Authentication failed.",true);}finally{$("#authSubmit").disabled=false;}});
+$("#signOutBtn").addEventListener("click",async()=>{const result=await supabase.auth.signOut();if(result.error){setAccountMessage(result.error.message,true);return;}await handleAuthSession(null);closeAccount();});
+supabase.auth.onAuthStateChange((_event,session)=>{Promise.resolve().then(()=>handleAuthSession(session));});

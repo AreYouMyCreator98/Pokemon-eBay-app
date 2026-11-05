@@ -14,7 +14,7 @@ async function verifiedNotification(req) {
   let meta;
   try { meta = JSON.parse(Buffer.from(header, "base64").toString("utf8")); }
   catch { throw new Error("Invalid signature header"); }
-  if (!meta || meta.alg !== "RSA-SHA256" || !/^[A-Za-z0-9_-]{1,128}$/.test(meta.kid || "") ||
+  if (!meta || String(meta.alg).toLowerCase() !== "ecdsa" || !/^[A-Za-z0-9_-]{1,128}$/.test(meta.kid || "") ||
       typeof meta.signature !== "string") throw new Error("Unsupported signature");
   const chunks = [];
   let size = 0;
@@ -44,7 +44,7 @@ async function verifiedNotification(req) {
     keyCache.set(meta.kid, publicKey);
     if (keyCache.size > 20) keyCache.delete(keyCache.keys().next().value);
   }
-  const verifier = createVerify("RSA-SHA256");
+  const verifier = createVerify("SHA256");
   verifier.update(raw);
   verifier.end();
   if (!verifier.verify(publicKey, Buffer.from(meta.signature, "base64"))) throw new Error("Signature mismatch");

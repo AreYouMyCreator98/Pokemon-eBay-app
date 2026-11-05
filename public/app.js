@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
 const supabase=createClient("https://prxvxomflqzviqiktcgr.supabase.co","sb_publishable_WrQ8yUaSj-z6nsx_-r9FGw_e1CkhXtc");
 const $=s=>document.querySelector(s);
 // Do not persist eBay seller identifiers or seller location in saved listing snapshots.
-function safeSnapshot(item){if(!item||typeof item!=="object")return null;const {seller,sellerFeedback,location,...safe}=item;return safe;}
+function safeSnapshot(item){if(!item||typeof item!=="object")return null;const keys=["id","title","image","price","currency","condition","endTime","bids","buyingOptions","url","marketplace"];return Object.fromEntries(keys.filter(k=>Object.prototype.hasOwnProperty.call(item,k)).map(k=>[k,item[k]]));}
 let cloudUser=null,cloudReady=false,authMode="signin",syncBusy=false;
 function setAccountMessage(message,error=false){$("#accountMessage").textContent=message;$("#accountMessage").classList.toggle("error",error);}
 function openAccount(){$("#accountPanel").classList.remove("hidden");}
@@ -25,7 +25,7 @@ async function loadCloudData(user){
  cloudReady=false;cloudUser=user;
  const [w,s]=await Promise.all([supabase.from("user_watchlist").select("item_id,item_snapshot,created_at").eq("user_id",user.id).order("created_at",{ascending:false}),supabase.from("user_saved_searches").select("search_key,query,marketplace,listing_type,sort_by,min_price,max_price,created_at").eq("user_id",user.id).order("created_at",{ascending:false})]);
  if(w.error)throw w.error;if(s.error)throw s.error;
- const localWatch=state.watchlist.filter(x=>x&&typeof x==="object"),localSearch=state.savedSearches;
+ const localWatch=state.watchlist.map(safeSnapshot).filter(Boolean),localSearch=state.savedSearches;
  if(!w.data.length&&localWatch.length){const rows=localWatch.map(x=>({user_id:user.id,item_id:String(x.id),item_url:x.url||null,item_title:x.title||"",item_snapshot:x}));const m=await supabase.from("user_watchlist").upsert(rows,{onConflict:"user_id,item_id"});if(m.error)throw m.error;}
  if(!s.data.length&&localSearch.length){const rows=localSearch.map(x=>({user_id:user.id,search_key:String(x.id),query:x.query,marketplace:x.marketplace,listing_type:x.type,sort_by:x.sort,min_price:x.minPrice===""?null:Number(x.minPrice),max_price:x.maxPrice===""?null:Number(x.maxPrice)}));const m=await supabase.from("user_saved_searches").upsert(rows,{onConflict:"user_id,search_key"});if(m.error)throw m.error;}
  const [wr,sr]=await Promise.all([supabase.from("user_watchlist").select("item_snapshot").eq("user_id",user.id).order("created_at",{ascending:false}),supabase.from("user_saved_searches").select("search_key,query,marketplace,listing_type,sort_by,min_price,max_price").eq("user_id",user.id).order("created_at",{ascending:false})]);
@@ -38,9 +38,11 @@ async function handleAuthSession(session){
  if(session?.user){try{await loadCloudData(session.user);}catch(error){cloudUser=session.user;cloudReady=false;setAccountMessage("Signed in, but cloud data could not load: "+error.message,true);}}
  else{cloudUser=null;cloudReady=false;state.watchlist=[];state.savedSearches=[];localStorage.removeItem("pokemarket-watchlist");localStorage.removeItem("pokemarket-searches");$("#authForm").classList.remove("hidden");$("#signedInActions").classList.add("hidden");$("#accountTitle").textContent="Your account";$("#accountBtn").textContent="Sign in";setAccountMessage("Sign in to sync your watchlist and saved searches across devices.");render();}
 }
-const state={tab:"discover",items:[],query:"",watchlist:load("pokemarket-watchlist",[]),savedSearches:load("pokemarket-searches",[]).map(x=>typeof x==="string"?{id:x,query:x,marketplace:"AU",type:"ALL",sort:"endingSoonest",minPrice:"",maxPrice:""}:x),alerted:load("pokemarket-alerted",[])};
+const state={tab:"discover",items:[],query:"",watchlist:load("pokemarket-watchlist",[]).map(safeSnapshot).filter(Boolean),savedSearches:load("pokemarket-searches",[]).map(x=>typeof x==="string"?{id:x,query:x,marketplace:"AU",type:"ALL",sort:"endingSoonest",minPrice:"",maxPrice:""}:x),alerted:load("pokemarket-alerted",[])};
 function load(key,fallback){try{return JSON.parse(localStorage.getItem(key))??fallback;}catch{return fallback;}}
-function save(key,value){localStorage.setItem(key,JSON.stringify(value));if(key==="pokemarket-watchlist"||key==="pokemarket-searches")void syncCollection(key,value);}
+// Remove previously cached eBay seller details, including older watchlist snapshots.
+for(const key of ["pokemarket-last-items","pokemarket-alerted"])localStorage.removeItem(key);
+function save(key,value){if(key==="pokemarket-watchlist")value=value.map(safeSnapshot).filter(Boolean);localStorage.setItem(key,JSON.stringify(value));if(key==="pokemarket-watchlist"||key==="pokemarket-searches")void syncCollection(key,value);}
 function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function money(v,c){return v==null?"Price unavailable":new Intl.NumberFormat(undefined,{style:"currency",currency:c||"AUD",maximumFractionDigits:2}).format(v);}
 function remaining(end){if(!end)return"Time not supplied";const ms=new Date(end).getTime()-Date.now();if(!Number.isFinite(ms))return"Time not supplied";if(ms<=0)return"Ended";const d=Math.floor(ms/86400000),h=Math.floor(ms%86400000/3600000),m=Math.floor(ms%3600000/60000),s=Math.floor(ms%60000/1000);return d?d+"d "+h+"h left":h?h+"h "+m+"m left":m+"m "+s+"s left";}
@@ -70,7 +72,7 @@ async function search(){
  state.query=q;$("#searchBtn").disabled=true;$("#searchBtn").textContent="Searching…";$("#status").classList.remove("error");$("#status").textContent="Connecting to eBay Browse API…";
  const p=new URLSearchParams({q,marketplace:$("#marketplace").value,type:$("#listingType").value,sort:$("#sortBy").value,limit:"36"});
  if($("#minPrice").value)p.set("minPrice",$("#minPrice").value);if($("#maxPrice").value)p.set("maxPrice",$("#maxPrice").value);
- try{const response=await fetch("/api/search?"+p);const data=await response.json();if(!response.ok)throw new Error(data.error||"Search failed");state.items=data.items||[];save("pokemarket-last-items",state.items);$("#status").textContent=data.source?"Live results supplied by eBay Browse API · Updated "+new Date(data.fetchedAt).toLocaleTimeString():"No live results returned. Check server-side eBay credentials.";render();}
+ try{const response=await fetch("/api/search?"+p);const data=await response.json();if(!response.ok)throw new Error(data.error||"Search failed");state.items=data.items||[];$("#status").textContent=data.source?"Live results supplied by eBay Browse API · Updated "+new Date(data.fetchedAt).toLocaleTimeString():"No live results returned. Check server-side eBay credentials.";render();}
  catch(error){state.items=[];$("#status").textContent=error.message+" Add eBay production API credentials to the hosting environment to enable live listings." ;$("#status").classList.add("error");render();}
  finally{$("#searchBtn").disabled=false;$("#searchBtn").innerHTML='Search <span>↗</span>';}
 }

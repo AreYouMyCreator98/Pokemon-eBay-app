@@ -10,8 +10,9 @@ const FEEDS=[
 const SEALED_PATTERN=/\b(?:sealed|booster\s*(?:box|pack|bundle|display)|elite\s*trainer\s*box|etb|blister|collection\s*(?:box|set)|display\s*box|collector\s*booster|starter\s*deck|structure\s*deck|theme\s*deck|sealed\s*deck|premium\s*collection|sealed\s*case|collector\s*box|tin|holiday\s*calendar|pre.?release\s*kit)\b/i;
 const GRADED_PATTERN=/\b(?:PSA|BGS|CGC|SGC|ACE)\s*(?:GEM\s*MINT\s*)?(?:10|9\.5|9|8\.5|8|7|6)\b|\b(?:graded|slabbed)\b/i;
 const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const isSealed=item=>SEALED_PATTERN.test(String(item.title||""));
-const isGraded=item=>!isSealed(item)&&GRADED_PATTERN.test(String(item.title||""));
+const isAccessory=item=>item.productType==="ACCESSORIES";
+const isSealed=item=>item.productType?item.productType==="SEALED":SEALED_PATTERN.test(String(item.title||""));
+const isGraded=item=>item.productType?item.productType==="GRADED":(!isSealed(item)&&GRADED_PATTERN.test(String(item.title||"")));
 const isFixed=item=>(item.buyingOptions||[]).includes("FIXED_PRICE")&&!(item.buyingOptions||[]).includes("AUCTION");
 const validPrice=item=>item?.price!=null&&Number.isFinite(Number(item.price))&&Number(item.price)>0;
 const money=(value,currency)=>value==null?"—":new Intl.NumberFormat("en-AU",{style:"currency",currency:currency==="USD"?"USD":"AUD",maximumFractionDigits:2}).format(value);
@@ -53,17 +54,18 @@ async function loadMarketMix(){
     perTCG.set(result.value.feed.id,perTCG.get(result.value.feed.id)+1);
    }
   }
-  const total=items.length,sealed=items.filter(isSealed).length,cards=total-sealed,graded=items.filter(isGraded).length;
+  const total=items.length,sealed=items.filter(isSealed).length,accessories=items.filter(isAccessory).length,cards=total-sealed-accessories,graded=items.filter(isGraded).length;
   $("#sampleSize").textContent=String(total);
   $("#cardShare").textContent=total?percent(cards,total)+"%":"—";
   $("#sealedShare").textContent=total?percent(sealed,total)+"%":"—";
-  $("#gradedShare").textContent=total?percent(graded,total)+"%":"—";
-  $("#cardCount").textContent=cards+" card listings sampled";
+  $("#accessoryShare").textContent=total?percent(accessories,total)+"%":"—";
+  $("#cardCount").textContent=cards+" card listings sampled ("+graded+" graded)";
   $("#sealedCount").textContent=sealed+" sealed listings sampled";
-  $("#gradedCount").textContent=graded+" graded card listings · "+(total?percent(graded,total):0)+"% of sample";
+  $("#accessoryCount").textContent=accessories+" binders, accessories and TCG collectibles";
   $("#mixCardsBar").style.width=percent(cards,total)+"%";
   $("#mixSealedBar").style.width=percent(sealed,total)+"%";
-  $("#mixBar").setAttribute("aria-label",total?percent(cards,total)+" percent cards and "+percent(sealed,total)+" percent sealed products in "+total+" sampled listings":"No sampled listings");
+  $("#mixAccessoriesBar").style.width=percent(accessories,total)+"%";
+  $("#mixBar").setAttribute("aria-label",total?percent(cards,total)+" percent cards, "+percent(sealed,total)+" percent sealed products and "+percent(accessories,total)+" percent accessories in "+total+" sampled listings":"No sampled listings");
   $("#mixTimestamp").textContent="Updated "+new Date().toLocaleTimeString("en-AU",{hour:"numeric",minute:"2-digit"});
   $("#tcgMixGrid").innerHTML=SAMPLE_LABELS.map(([id,label])=>{
    const count=perTCG.get(id)||0;
@@ -79,7 +81,7 @@ async function loadMarketMix(){
 function listingCard(item,currency){
  const url=ebayUrl(item.url),title=esc(item.title||"Untitled listing");
  const image=/^https:\/\//i.test(item.image||"")?'<img src="'+esc(item.image)+'" alt="" loading="lazy" referrerpolicy="no-referrer">':'<span class="stats-listing-fallback" aria-hidden="true">✦</span>';
- const grade=isGraded(item)?"Graded card":isSealed(item)?"Sealed product":"Trading card";
+ const grade=isAccessory(item)?"TCG accessory / collectible":isGraded(item)?"Graded card":isSealed(item)?"Sealed product":"Trading card";
  return '<article class="stats-listing">'+
   '<div class="stats-listing-image">'+image+'</div>'+
   '<div class="stats-listing-details"><span class="stats-listing-type">'+esc(grade)+'</span>'+
@@ -106,7 +108,8 @@ async function searchPrices(event){
   if(requestId!==priceRequestId)return;
   const before=items.length;
   if(kind==="SEALED")items=items.filter(isSealed);
-  else if(kind==="CARDS")items=items.filter(item=>!isSealed(item));
+  else if(kind==="CARDS")items=items.filter(item=>!isSealed(item)&&!isAccessory(item));
+  else if(kind==="ACCESSORIES")items=items.filter(isAccessory);
   // Never average USD with AUD or other currencies. Individual listings retain their own price labels.
   const matched=items.filter(item=>validPrice(item)&&item.currency===currency);
   const values=matched.map(item=>Number(item.price)),sum=values.reduce((a,b)=>a+b,0);

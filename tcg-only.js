@@ -28,6 +28,8 @@ export function classifyTCGListing(item){
  // Explicit TCG goods can have short seller titles, but generic descriptive
  // words ("sealed", "display", "crystal") alone are never enough.
  const protectiveDisplay=/\b(?:acrylic|protector|protective|magnetic|card holder|card stand|storage case|outer case|outer box)\b/.test(title);
+ const clearlySupplies=/\b(?:binder|portfolio|album|sleeves?|toploaders?|top loaders?|playmats?|binder pages|card storage|card holders?|card dividers)\b/.test(title)&&!/\b(?:boosters?|etb|elite trainer box)\b/.test(title);
+ if(accessory&&accessoryContext&&clearlySupplies)return "ACCESSORIES";
  if(sealed&&(cardContext||/\b(?:trading cards?|card game|tcg|ccg)\b/.test(title))&&!protectiveDisplay)return "SEALED";
  if(accessory&&accessoryContext)return "ACCESSORIES";
  if(collectible&&(franchise||tcgLabel||knownSet))return "ACCESSORIES";

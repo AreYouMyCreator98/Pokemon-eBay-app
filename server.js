@@ -16,7 +16,7 @@ try {
 const MARKETPLACES = { AU: { id: "EBAY_AU", currency: "AUD" }, US: { id: "EBAY_US", currency: "USD" } };
 let tokenCache = { value: "", expiresAt: 0 };
 let tokenPromise;
-const mime = { ".html":"text/html; charset=utf-8", ".css":"text/css; charset=utf-8", ".js":"text/javascript; charset=utf-8", ".json":"application/json; charset=utf-8", ".webmanifest":"application/manifest+json" };
+const mime = { ".html":"text/html; charset=utf-8", ".css":"text/css; charset=utf-8", ".js":"text/javascript; charset=utf-8", ".json":"application/json; charset=utf-8", ".webmanifest":"application/manifest+json", ".svg":"image/svg+xml" };
 function send(res,status,body,type="application/json; charset=utf-8") {
   res.writeHead(status,{"Content-Type":type,"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"});
   res.end(type.startsWith("application/json")?JSON.stringify(body):body);
@@ -66,7 +66,7 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==="GET"&&url.pathname==="/api/search"){try{return send(res,200,await searchEbay(url.searchParams));}catch(error){return send(res,502,{error:error.message||"Search unavailable"});}}
   if(req.method==="GET"&&url.pathname==="/api/sold")return send(res,200,{available:false,items:[],message:"Verified sold-history access is not connected. eBay Marketplace Insights access is restricted; no sold prices are fabricated or scraped."});
   if(req.method!=="GET")return send(res,405,{error:"Method not allowed"});
-  const requested=url.pathname==="/ "?"index.html":url.pathname==="/"? "index.html":decodeURIComponent(url.pathname.slice(1));
+  const requested=url.pathname==="/"? "index.html":decodeURIComponent(url.pathname.slice(1));
   const safePath=normalize(requested).replace(/^([.][.][/\\])+/, ""),file=join(PUBLIC,safePath);
   if(!file.startsWith(PUBLIC))return send(res,403,{error:"Forbidden"});
   try{const body=await readFile(file);res.writeHead(200,{"Content-Type":mime[extname(file)]||"application/octet-stream","X-Content-Type-Options":"nosniff"});res.end(body);}catch{send(res,404,"Not found","text/plain; charset=utf-8");}

@@ -117,7 +117,8 @@ const TCG_FEEDS=[
  {id:"POKEMON",label:"Pokémon",q:"pokemon trading card"},
  {id:"ONE_PIECE",label:"One Piece",q:"one piece card game"},
  {id:"YUGIOH",label:"Yu-Gi-Oh!",q:"yugioh trading card"},
- {id:"MTG",label:"Magic: The Gathering",q:"magic the gathering mtg card"}
+ {id:"MTG",label:"Magic: The Gathering",q:"magic the gathering mtg card"},
+ {id:"ACCESSORIES",label:"TCG Binders & Supplies",q:"trading card binder"}
 ];
 function feedContext(){return {marketplace:$("#marketplace").value,shipFrom:$("#shipFrom").value,shipsTo:$("#shipsTo").value,minPrice:$("#minPrice").value,maxPrice:$("#maxPrice").value};}
 function feedContextKey(type){return type+"|"+JSON.stringify(feedContext());}

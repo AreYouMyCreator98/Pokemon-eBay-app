@@ -40,3 +40,56 @@
 @media(max-width:600px){.listing-image .overlay-tags .asset-badge{flex-basis:48%;max-width:48%}.listing-image .overlay-tags .asset-badge img{max-height:34px!important}.listing-image .grade-image-badge img{width:clamp(64px,22vw,87px)!important;max-height:34px}.auction-clock{gap:3px}.auction-clock .countdown-overlay{width:clamp(75px,42%,102px)}.auction-clock .countdown{font-size:11px}.category-filters .overlay-filter-chip{padding:1px!important;min-height:35px}.category-filters .overlay-filter-chip img{max-height:39px!important}.overlay-spotlight-tag img{width:clamp(70px,21vw,92px)}.overlay-spotlight-time img{width:83px}}
 @media(max-width:370px){.auction-clock .countdown{font-size:10px}.listing-condition .condition-overlay{width:135px}.category-filters .overlay-filter-chip img{max-height:33px!important}}
 @media(prefers-reduced-motion:reduce){.overlay-tags .is-auction img{animation:none!important}}
+
+/* TCG Bid Buy Watch holographic navigation v3 */
+.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.top-actions .control-icon-btn,.account-button.control-icon-btn,.icon-button.control-icon-btn{display:grid!important;place-items:center!important;width:clamp(44px,5vw,54px)!important;height:clamp(44px,5vw,54px)!important;flex:0 0 auto;min-width:44px;margin:0;padding:0!important;background:transparent!important;border:0!important;border-radius:14px!important;color:transparent!important;font-size:0!important;line-height:0!important;box-shadow:none!important;cursor:pointer}
+.control-icon-btn img{width:100%;height:100%;object-fit:contain;display:block;pointer-events:none}
+.tcg-quick-nav{display:flex;align-items:center;justify-content:center;gap:clamp(7px,1.4vw,19px);margin:7px auto 5px;padding:1px 0;max-width:100%}
+.tcg-quick-nav button{width:clamp(57px,8vw,85px);height:clamp(57px,8vw,85px);padding:0;border:0;background:transparent;border-radius:17px;cursor:pointer;transition:transform .18s ease,filter .18s ease;flex:0 1 85px;min-width:48px}
+.tcg-quick-nav img{display:block;width:100%;height:100%;object-fit:contain;pointer-events:none}
+.tcg-quick-nav button:hover,.control-icon-btn:hover,.control-wide-btn:hover{filter:brightness(1.19) drop-shadow(0 0 7px #9e5cff80)}
+.tcg-quick-nav button:active,.control-icon-btn:active,.control-wide-btn:active{transform:scale(.96)}
+.tcg-quick-nav button[aria-expanded="true"]{filter:drop-shadow(0 0 8px #b270ff)}
+.tcg-quick-nav button:focus-visible,.control-icon-btn:focus-visible,.control-wide-btn:focus-visible,.custom-grid-list button:focus-visible,.control-search-btn:focus-visible{outline:2px solid #a0e9ff!important;outline-offset:3px}
+.search-panel-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:7px}
+.search-panel-heading .search-label{margin:0}
+.control-wide-btn{display:inline-flex;align-items:center;justify-content:center;max-width:100%;min-height:42px;border:0!important;background:transparent!important;color:transparent!important;box-shadow:none!important;padding:0!important;border-radius:14px!important;cursor:pointer;line-height:0;flex-shrink:0}
+.control-wide-btn img{display:block;width:100%;height:auto;max-height:100%;object-fit:contain;pointer-events:none}
+.control-filter-toggle{width:clamp(106px,20vw,183px);height:48px}
+.reset-filters.control-wide-btn{width:clamp(125px,14vw,188px);height:46px;margin-top:5px;align-self:end}
+.search-row{min-width:0}
+.search-row input{min-width:0;width:100%}
+.search-row .control-search-btn{display:grid!important;place-items:center!important;flex:0 0 49px!important;width:49px!important;height:49px!important;min-width:49px!important;max-width:49px!important;border:0!important;padding:0!important;background:transparent!important;border-radius:10px!important;box-shadow:none!important;cursor:pointer;position:relative}
+.control-search-btn img{display:block;width:100%;height:100%;object-fit:contain;pointer-events:none}
+.control-search-btn.searching{filter:brightness(.75) saturate(.65)}
+.control-search-btn.searching:after{content:"";position:absolute;inset:13px;border:2px solid #9d67ff;border-top-color:#5deaff;border-radius:50%;animation:tcg-loading .85s linear infinite}
+@keyframes tcg-loading{to{transform:rotate(360deg)}}
+.category-filters .overlay-filter-chip{min-width:0;min-height:44px!important}
+.category-filters .overlay-filter-chip img{width:100%!important;height:auto!important;max-width:165px!important;max-height:48px!important;object-fit:contain!important;pointer-events:none}
+.custom-grid-list.view-switch{position:relative;display:block!important;width:clamp(170px,20vw,238px);max-width:100%;aspect-ratio:740/186;height:auto;min-height:43px;flex:none;overflow:visible;border:0;background:transparent;padding:0!important;margin-left:auto;isolation:isolate}
+.custom-grid-list .grid-list-art{display:block;position:relative;width:100%;height:100%;object-fit:fill;pointer-events:none}
+.custom-grid-list button{position:absolute!important;top:8%!important;bottom:8%!important;width:48%!important;height:84%!important;margin:0!important;padding:0!important;background:transparent!important;border:1px solid transparent!important;box-shadow:none!important;border-radius:30px!important;z-index:2;cursor:pointer}
+.custom-grid-list button[data-view="grid"]{left:2%}
+.custom-grid-list button[data-view="list"]{right:2%}
+.custom-grid-list[data-active="list"]::before{content:"";position:absolute;z-index:1;left:3%;top:14%;height:72%;width:46%;background:#080b25aa;border-radius:30px;pointer-events:none}
+.custom-grid-list[data-active="list"] button[data-view="list"]{border-color:#a7eeff88!important;box-shadow:inset 0 0 17px #75e9ff55,0 0 10px #4de9ff66!important}
+.custom-grid-list[data-active="grid"] button[data-view="grid"]{box-shadow:inset 0 0 10px #a65aff33!important}
+a.custom-ebay-link{display:flex!important;align-items:center;justify-content:center;width:100%;min-width:0;min-height:39px;padding:0!important;background:transparent!important;border:0!important;border-radius:12px!important;color:inherit!important;box-shadow:none!important;text-decoration:none!important;transition:filter .2s,transform .2s}
+a.custom-ebay-link img{display:block;width:100%;height:auto;max-height:59px;object-fit:contain;pointer-events:none}
+.card-actions a.custom-ebay-link{flex:1}
+.spotlight-info a.custom-ebay-link{width:min(100%,242px);margin-top:auto}
+a.custom-ebay-link:hover{filter:brightness(1.19) drop-shadow(0 0 7px #9d60ff70);transform:translateY(-1px)}
+.tcg-info-panel{margin:15px 0;padding:15px 18px;border:1px solid #8665de88;border-radius:17px;background:radial-gradient(ellipse at top right,#39236d66,transparent 70%),linear-gradient(135deg,#151a3b,#0d1731);box-shadow:0 10px 30px #0005}
+.tcg-info-panel-title{display:flex;justify-content:space-between;align-items:center;gap:9px}
+.tcg-info-panel h2{font-size:18px;line-height:1.2;margin:0;font-weight:850;color:#f3eaff}
+.tcg-info-panel-title button{width:40px;height:40px;border:1px solid #8665de88;border-radius:12px;background:#1a1740;color:#f1e6ff;font-size:26px;cursor:pointer}
+.tcg-info-panel p{color:#afb9df;font-size:12px;line-height:1.5;margin:9px 0 0}
+.tcg-stats-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:14px 0}
+.tcg-stat{min-width:0;display:flex;flex-direction:column;gap:3px;padding:11px;border:1px solid #7c5cb46e;border-radius:12px;background:#0e1534cc}
+.tcg-stat span{font-size:10px;letter-spacing:.5px;color:#aeb6e5}
+.tcg-stat strong{color:#f8ecff;font-size:clamp(13px,1.5vw,18px);overflow-wrap:anywhere}
+@media(max-width:650px){.tcg-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.market-toolbar{align-items:center;gap:8px}.category-filters{min-width:0}.custom-grid-list.view-switch{width:clamp(162px,46vw,225px)}}
+@media(max-width:520px){.topbar{gap:5px}.top-actions{gap:3px}.top-actions .control-icon-btn{width:clamp(39px,10vw,44px)!important;height:clamp(39px,10vw,44px)!important;min-width:39px}.tcg-quick-nav{margin-top:2px;gap:clamp(6px,2vw,12px)}.tcg-quick-nav button{width:clamp(58px,17vw,74px);height:clamp(58px,17vw,74px)}.search-panel-heading{gap:8px}.control-filter-toggle{width:clamp(106px,33vw,140px);height:42px}.reset-filters.control-wide-btn{width:100%;max-width:180px;height:45px}.search-row .control-search-btn{flex-basis:48px!important;width:48px!important;height:48px!important;min-width:48px!important}.category-filters{grid-template-columns:repeat(4,minmax(0,1fr));width:100%;gap:3px}.category-filters .overlay-filter-chip{min-height:39px!important;padding:0!important}.category-filters .overlay-filter-chip img{max-height:37px!important}.custom-grid-list.view-switch{height:52px;min-height:44px}.spotlight-info a.custom-ebay-link{width:100%}.card-actions a.custom-ebay-link{min-height:38px}}
+@media(max-width:360px){.tcg-quick-nav button{width:56px;height:56px}.top-actions .live-pill{display:none}.category-filters .overlay-filter-chip img{max-height:34px!important}.custom-grid-list.view-switch{width:162px}.search-panel-heading .search-label{font-size:9px}}
+@media(prefers-reduced-motion:reduce){.control-search-btn.searching:after,.tcg-quick-nav button,a.custom-ebay-link{animation:none!important;transition:none!important}}

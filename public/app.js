@@ -116,8 +116,37 @@ function category(item){
 }
 function spotlightCard(item){const url=/^https:\/\/www\.ebay\.(com\.au|com)\//i.test(item.url||"")?item.url:"";const image=item.image?'<img src="'+esc(item.image)+'" alt="" loading="lazy" referrerpolicy="no-referrer">':'<span class="spotlight-fallback">✦</span>';return '<article class="spotlight-item"><div class="spotlight-photo">'+image+'</div><div class="spotlight-info"><span class="spotlight-tag overlay-spotlight-tag"><img src="/assets/overlays/auction.webp" alt="Auction" loading="lazy"><img src="/assets/overlays/'+(category(item)==='ACCESSORIES'?'accessories.svg':category(item).toLowerCase()+'.webp')+'" alt="'+esc(category(item))+'" loading="lazy"></span><h3>'+esc(item.title)+'</h3><div class="spotlight-price"><small class="spotlight-price-caption">'+(item.bids===0?"STARTING BID":item.bids==null?"AUCTION PRICE":"CURRENT BID")+'</small>'+money(item.price,item.currency)+'</div><div class="spotlight-time overlay-spotlight-time"><img src="/assets/overlays/time-left.webp" alt="Time left" loading="lazy"><span class="countdown" data-end="'+esc(item.endTime||"")+'">'+esc(remaining(item.endTime))+'</span></div>'+(url?'<a class="spotlight-link custom-ebay-link" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" aria-label="View this item on eBay"><img src="/assets/controls/view-ebay.webp" alt="View eBay listing" loading="lazy"></a>':'')+'</div></article>';}
 function moveSpotlight(direction=1){const count=state.featured.length;if(!count)return;state.featureIndex=(state.featureIndex+direction+count)%count;const track=$("#spotTrack");track.style.transform="translateX(-"+(state.featureIndex*100)+"%)";$("#spotProgress").innerHTML=state.featured.map((_,i)=>'<span class="'+(i===state.featureIndex?"active":"")+'"></span>').join("");}
-async function loadSpotlight(){try{const p=new URLSearchParams({q:"pokemon trading card",marketplace:"AU",type:"AUCTION",sort:"endingSoonest",limit:"50",smart:"0"});if($("#shipFrom").value!=="ANY")p.set("shipFrom",$("#shipFrom").value);if($("#shipsTo").value!=="ANY")p.set("shipsTo",$("#shipsTo").value);const response=await fetch("/api/search?"+p);if(!response.ok)throw Error("Auction feed unavailable");const data=await response.json();state.featured=(data.items||[]).filter(x=>(x.buyingOptions||[]).includes("AUCTION")&&x.endTime&&new Date(x.endTime)>new Date()&&x.url).sort((a,b)=>new Date(a.endTime)-new Date(b.endTime)).slice(0,12);state.featureIndex=0;$("#spotTrack").innerHTML=state.featured.length?state.featured.map(spotlightCard).join(""):'<div class="spotlight-loading">No ending-soon auctions returned right now. Try searching below.</div>';$("#spotTrack").style.transform="translateX(0)";moveSpotlight(0);}catch(error){$("#spotTrack").innerHTML='<div class="spotlight-loading">Live auction highlights are temporarily unavailable. Search below for current listings.</div>';}}
-// Auction highlights refresh only after the user applies country filters.
+let spotlightSerial=0;
+async function loadSpotlight(){
+ const serial=++spotlightSerial;
+ const selected={...appliedFilters};
+ const bounds=priceBounds(selected),currency=selected.marketplace==="US"?"USD":"AUD";
+ const filtersOn=bounds.active;
+ state.featured=[];
+ $("#spotTrack").innerHTML='<div class="spotlight-loading">Checking live auctions'+(filtersOn?" in your chosen price range":"")+'…</div>';
+ try{
+  const p=new URLSearchParams({q:"pokemon trading card",marketplace:selected.marketplace,type:"AUCTION",sort:"endingSoonest",limit:"50",smart:"0"});
+  if(selected.shipFrom!=="ANY")p.set("shipFrom",selected.shipFrom);
+  if(selected.shipsTo!=="ANY")p.set("shipsTo",selected.shipsTo);
+  if(selected.minPrice!=="")p.set("minPrice",selected.minPrice);
+  if(selected.maxPrice!=="")p.set("maxPrice",selected.maxPrice);
+  const response=await fetch("/api/search?"+p);
+  if(!response.ok)throw Error("Auction feed unavailable");
+  const data=await response.json();
+  if(serial!==spotlightSerial)return;
+  state.featured=(data.items||[]).filter(x=>
+   (x.buyingOptions||[]).includes("AUCTION")&&x.endTime&&new Date(x.endTime)>new Date()&&x.url&&itemInPriceRange(x,bounds,currency)
+  ).sort((a,b)=>new Date(a.endTime)-new Date(b.endTime)).slice(0,12);
+  state.featureIndex=0;
+  $("#spotTrack").innerHTML=state.featured.length?state.featured.map(spotlightCard).join(""):'<div class="spotlight-loading">'+(filtersOn?"No live auction highlights within your price range. Adjust your budget to see more.":"No ending-soon auctions returned right now. Try searching below.")+'</div>';
+  $("#spotTrack").style.transform="translateX(0)";
+  moveSpotlight(0);
+ }catch(error){
+  if(serial!==spotlightSerial)return;
+  $("#spotTrack").innerHTML='<div class="spotlight-loading">Live auction highlights are temporarily unavailable. Search below for current listings.</div>';
+ }
+}
+// Auction highlights refresh after applying marketplace, shipping or price changes.
 $("#spotPrev").addEventListener("click",()=>moveSpotlight(-1));$("#spotNext").addEventListener("click",()=>moveSpotlight(1));
 $("#spotWindow").addEventListener("mouseenter",()=>state.spotPaused=true);$("#spotWindow").addEventListener("mouseleave",()=>state.spotPaused=false);$("#spotWindow").addEventListener("touchstart",event=>{state.spotTouchX=event.touches[0].clientX;state.spotPaused=true;},{passive:true});$("#spotWindow").addEventListener("touchend",event=>{if(state.spotTouchX!=null){const delta=event.changedTouches[0].clientX-state.spotTouchX;if(Math.abs(delta)>45)moveSpotlight(delta<0?1:-1);}state.spotTouchX=null;state.spotPaused=false;},{passive:true});
 setInterval(()=>{if(!state.spotPaused&&!document.hidden)moveSpotlight(1);},6500);loadSpotlight();

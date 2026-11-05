@@ -1,6 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
+import { priceBounds, itemInPriceRange, sortByListingPrice } from "./price-range.js";
 const supabase=createClient("https://prxvxomflqzviqiktcgr.supabase.co","sb_publishable_WrQ8yUaSj-z6nsx_-r9FGw_e1CkhXtc");
 const $=s=>document.querySelector(s);
+const FILTER_DEFAULTS=Object.freeze({shipFrom:"ANY",shipsTo:"ANY",marketplace:"AU",listingType:"ALL",sortBy:"endingSoonest",minPrice:"",maxPrice:"",setFilter:"",gradeFilter:"",conditionFilter:""});
+const FILTER_FIELDS=Object.keys(FILTER_DEFAULTS);
+let appliedFilters=readFilterValues();
 // Do not persist eBay seller identifiers or seller location in saved listing snapshots.
 function safeSnapshot(item){if(!item||typeof item!=="object")return null;const url=String(item.url||"");if(!/^https:\/\/www\.ebay\.(com\.au|com)\/itm\//i.test(url))return null;return {id:url,url};}
 let cloudUser=null,cloudReady=false,authMode="signin",syncBusy=false;
@@ -65,14 +69,19 @@ function render(){
  const labels={discover:isFeed?["ALL TCG DISCOVERY","Live Buy It Now listings"]:["LIVE MARKETPLACE","Search results"],ending:["LAST-MINUTE AUCTIONS","Ending within "+state.endingWindow+" minutes"],sold:["MARKET HISTORY","Recently sold"]};
  $("#sectionEyebrow").textContent=labels[state.tab][0];$("#sectionTitle").textContent=labels[state.tab][1];
  if(sold){$("#resultCount").textContent="Verified data pending";return;}
- const items=visibleItems();$("#resultCount").textContent=items.length?items.length+" live listings":"Ready to search";
+ const marketCurrency=appliedFilters.marketplace==="US"?"USD":"AUD";
+ const bounds=priceBounds(appliedFilters);
+ const items=visibleItems().filter(item=>itemInPriceRange(item,bounds,marketCurrency));
+ $("#resultCount").textContent=items.length?items.length+" live listings":"Ready to search";
  if(!items.length){
+  if(bounds.active){$("#listingGrid").innerHTML='<div class="empty"><strong>No listings in your chosen price range</strong>Try expanding your minimum/maximum, or switch to another marketplace. Only listing prices in '+marketCurrency+' are included; postage is extra.</div>';$("#resultCount").textContent="0 listings in budget";if(isFeed)$("#discoverPageLabel").textContent="0 / 0";return;}
   $("#listingGrid").innerHTML='<div class="empty"><strong>'+(isEnding?"No auctions currently closing in the next "+state.endingWindow+" minutes":isFeed?"No Buy It Now listings loaded yet":"No listings loaded yet")+'</strong>'+(isEnding?"Try the 10-minute window or refresh. Only confirmed countdowns are shown.":isFeed?"eBay may be returning no matches right now. Try refreshing or choosing another marketplace.":"Search a card, set or sealed product above.")+'</div>';
   $("#resultCount").textContent="0 listings";
   if(isFeed)$("#discoverPageLabel").textContent="0 / 0";
   return;
  }
- let visible=items.filter(item=>{const title=String(item.title||"").toLowerCase(),cat=category(item).toLowerCase(),set=$("#setFilter").value.toLowerCase(),grade=$("#gradeFilter").value,condition=$("#conditionFilter").value;return (state.category==="ALL"||cat===state.category.toLowerCase())&&(!set||title.includes(set))&&(!grade||(grade==="RAW"?cat==="raw":title.includes(grade.toLowerCase())))&&(!condition||(condition==="FACTORY"?/factory sealed|sealed/.test(title):String(item.condition||"").toUpperCase().includes(condition)));});
+ let visible=items.filter(item=>{const title=String(item.title||"").toLowerCase(),cat=category(item).toLowerCase(),set=appliedFilters.setFilter.toLowerCase(),grade=appliedFilters.gradeFilter,condition=appliedFilters.conditionFilter;return (state.category==="ALL"||cat===state.category.toLowerCase())&&(!set||title.includes(set))&&(!grade||(grade==="RAW"?cat==="raw":title.includes(grade.toLowerCase())))&&(!condition||(condition==="FACTORY"?/factory sealed|sealed/.test(title):String(item.condition||"").toUpperCase().includes(condition)));});
+ visible=sortByListingPrice(visible,appliedFilters.sortBy,marketCurrency);
  if(isFeed){
   if(state.tcgFocus!=="ALL")visible=visible.filter(item=>item.tcg===state.tcgFocus);
   const count=visible.length,pages=Math.max(1,Math.ceil(count/12));
@@ -120,7 +129,7 @@ const TCG_FEEDS=[
  {id:"MTG",label:"Magic: The Gathering",q:"magic the gathering mtg card"},
  {id:"ACCESSORIES",label:"TCG Binders & Supplies",q:"trading card binder"}
 ];
-function feedContext(){return {marketplace:$("#marketplace").value,shipFrom:$("#shipFrom").value,shipsTo:$("#shipsTo").value,minPrice:$("#minPrice").value,maxPrice:$("#maxPrice").value};}
+function feedContext(){return {marketplace:appliedFilters.marketplace,shipFrom:appliedFilters.shipFrom,shipsTo:appliedFilters.shipsTo,minPrice:appliedFilters.minPrice,maxPrice:appliedFilters.maxPrice};}
 function feedContextKey(type){return type+"|"+JSON.stringify(feedContext());}
 function feedQuery(game,type){
  const f=feedContext(),p=new URLSearchParams({q:game.q,marketplace:f.marketplace,type,sort:type==="FIXED"?"newlyListed":"endingSoonest",limit:type==="FIXED"?"24":"50",smart:"0"});
@@ -237,11 +246,11 @@ async function search(){
  $("#searchBtn").setAttribute("aria-label","Searching listings");
  $("#status").classList.remove("error");
  $("#status").textContent="Searching eBay and checking related product names…";
- const p=new URLSearchParams({q,marketplace:$("#marketplace").value,type:$("#listingType").value,sort:$("#sortBy").value,limit:"36",smart:"1"});
- if($("#shipFrom").value!=="ANY")p.set("shipFrom",$("#shipFrom").value);
- if($("#shipsTo").value!=="ANY")p.set("shipsTo",$("#shipsTo").value);
- if($("#minPrice").value)p.set("minPrice",$("#minPrice").value);
- if($("#maxPrice").value)p.set("maxPrice",$("#maxPrice").value);
+ const p=new URLSearchParams({q,marketplace:appliedFilters.marketplace,type:appliedFilters.listingType,sort:appliedFilters.sortBy,limit:"36",smart:"1"});
+ if(appliedFilters.shipFrom!=="ANY")p.set("shipFrom",appliedFilters.shipFrom);
+ if(appliedFilters.shipsTo!=="ANY")p.set("shipsTo",appliedFilters.shipsTo);
+ if(appliedFilters.minPrice!=="")p.set("minPrice",appliedFilters.minPrice);
+ if(appliedFilters.maxPrice!=="")p.set("maxPrice",appliedFilters.maxPrice);
  try{
   const response=await fetch("/api/search?"+p);
   const data=await response.json();
@@ -312,11 +321,8 @@ $("#infoClose").addEventListener("click",dismissInfo);
 $("#infoGotIt").addEventListener("click",dismissInfo);
 infoDialog.addEventListener("click",event=>{if(event.target===infoDialog)dismissInfo();});
 // Keep filter selections private until Apply, so using the dropdown doesn't repeatedly fetch from eBay.
-const FILTER_DEFAULTS=Object.freeze({shipFrom:"ANY",shipsTo:"ANY",marketplace:"AU",listingType:"ALL",sortBy:"endingSoonest",minPrice:"",maxPrice:"",setFilter:"",gradeFilter:"",conditionFilter:""});
-const FILTER_FIELDS=Object.keys(FILTER_DEFAULTS);
 function readFilterValues(){return Object.fromEntries(FILTER_FIELDS.map(id=>[id,$("#"+id).value]));}
-function writeFilterValues(values){for(const id of FILTER_FIELDS)$("#"+id).value=values[id]??FILTER_DEFAULTS[id];}
-let appliedFilters=readFilterValues();
+function writeFilterValues(values){for(const id of FILTER_FIELDS)$("#"+id).value=values[id]??FILTER_DEFAULTS[id];syncPricePresets();}
 let resetCategoryOnApply=false;
 function updateFilterSummary(){
  const active=FILTER_FIELDS.filter(id=>appliedFilters[id]!==FILTER_DEFAULTS[id]);

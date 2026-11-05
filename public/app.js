@@ -37,7 +37,7 @@ async function handleAuthSession(session){
  if(session?.user){try{await loadCloudData(session.user);}catch(error){cloudUser=session.user;cloudReady=false;setAccountMessage("Signed in, but cloud data could not load: "+error.message,true);}}
  else{cloudUser=null;cloudReady=false;state.watchlist=[];state.savedSearches=[];localStorage.removeItem("pokemarket-watchlist");localStorage.removeItem("pokemarket-searches");$("#authForm").classList.remove("hidden");$("#signedInActions").classList.add("hidden");$("#accountTitle").textContent="Your account";$("#accountBtn").setAttribute("aria-label","Sign in");$("#accountBtn").title="Sign in";setAccountMessage("Sign in to sync your saved searches across devices.");render();}
 }
-const state={featured:[],featureIndex:0,tab:"discover",view:"grid",category:"ALL",items:[],query:"",watchlist:[],savedSearches:load("pokemarket-searches",[]).map(x=>typeof x==="string"?{id:x,query:x,marketplace:"AU",type:"ALL",sort:"endingSoonest",shipFrom:"ANY",shipsTo:"ANY",minPrice:"",maxPrice:""}:x),alerted:[]};
+const state={featured:[],featureIndex:0,tab:"discover",mode:"feed",view:"grid",tcgFocus:"ALL",discoverPage:0,discoverItems:[],endingItems:[],endingWindow:10,discoverFetchedAt:0,endingFetchedAt:0,discoverKey:"",endingKey:"",discoverRequestId:0,endingRequestId:0,discoverPaused:false,discoverHover:false,discoverLastInteraction:0,category:"ALL",items:[],query:"",watchlist:[],savedSearches:load("pokemarket-searches",[]).map(x=>typeof x==="string"?{id:x,query:x,marketplace:"AU",type:"ALL",sort:"endingSoonest",shipFrom:"ANY",shipsTo:"ANY",minPrice:"",maxPrice:""}:x),alerted:[]};
 function load(key,fallback){try{return JSON.parse(localStorage.getItem(key))??fallback;}catch{return fallback;}}
 // Remove previously cached eBay seller details, including older watchlist snapshots.
 for(const key of ["pokemarket-last-items","pokemarket-alerted","pokemarket-watchlist"])localStorage.removeItem(key);
@@ -48,7 +48,11 @@ function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&l
 function money(v,c){return v==null?"Price unavailable":new Intl.NumberFormat(undefined,{style:"currency",currency:c||"AUD",maximumFractionDigits:2}).format(v);}
 function remaining(end){if(!end)return"Time not supplied";const ms=new Date(end).getTime()-Date.now();if(!Number.isFinite(ms))return"Time not supplied";if(ms<=0)return"Ended";const d=Math.floor(ms/86400000),h=Math.floor(ms%86400000/3600000),m=Math.floor(ms%3600000/60000),s=Math.floor(ms%60000/1000);return d?d+"d "+h+"h left":h?h+"h "+m+"m left":m+"m "+s+"s left";}
 function isSaved(item){return state.watchlist.some(x=>x&&x.url===item.url);}
-function visibleItems(){if(state.tab==="ending")return [...state.items].sort((a,b)=>new Date(a.endTime||8640000000000000)-new Date(b.endTime||8640000000000000));return state.items;}
+function visibleItems(){
+ if(state.tab==="ending"){const now=Date.now(),limit=state.endingWindow*60000;return state.items.filter(x=>(x.buyingOptions||[]).includes("AUCTION")&&x.endTime&&new Date(x.endTime).getTime()>now&&new Date(x.endTime).getTime()-now<=limit).sort((a,b)=>new Date(a.endTime)-new Date(b.endTime));}
+ if(state.tab==="discover"&&state.mode==="feed")return state.items.filter(x=>(x.buyingOptions||[]).includes("FIXED_PRICE"));
+ return state.items;
+}
 function renderSavedSearches(){
  const host=$("#savedSearchTags");if(!host)return;
  host.innerHTML=state.savedSearches.map((s,i)=>'<button class="tag" data-saved-index="'+i+'">'+esc(s.query)+' · '+esc(s.marketplace)+' · '+esc(s.type)+' ↗</button>').join("");
@@ -56,13 +60,28 @@ function renderSavedSearches(){
 function render(){
  renderSavedSearches();if(!$("#statsPanel").classList.contains("hidden"))renderMarketStats();
  const sold=state.tab==="sold";$("#soldNotice").classList.toggle("hidden",!sold);$("#listingGrid").classList.toggle("hidden",sold);
- const labels={discover:["LIVE MARKETPLACE","Marketplace listings"],ending:["AUCTION RADAR","Ending soon"],sold:["MARKET HISTORY","Recently sold"]};
+ const isFeed=state.tab==="discover"&&state.mode==="feed",isEnding=state.tab==="ending";
+ $("#discoveryControls").classList.toggle("hidden",!isFeed);$("#endingControls").classList.toggle("hidden",!isEnding);
+ const labels={discover:isFeed?["ALL TCG DISCOVERY","Live Buy It Now listings"]:["LIVE MARKETPLACE","Search results"],ending:["LAST-MINUTE AUCTIONS","Ending within "+state.endingWindow+" minutes"],sold:["MARKET HISTORY","Recently sold"]};
  $("#sectionEyebrow").textContent=labels[state.tab][0];$("#sectionTitle").textContent=labels[state.tab][1];
  if(sold){$("#resultCount").textContent="Verified data pending";return;}
  const items=visibleItems();$("#resultCount").textContent=items.length?items.length+" live listings":"Ready to search";
- if(!items.length){$("#listingGrid").innerHTML='<div class="empty"><strong>No listings loaded yet</strong>Search a Pokémon card, set or sealed product to explore the live market.</div>';return;}
- const visible=items.filter(item=>{const title=String(item.title||"").toLowerCase(),cat=category(item).toLowerCase(),set=$("#setFilter").value.toLowerCase(),grade=$("#gradeFilter").value,condition=$("#conditionFilter").value;return (state.category==="ALL"||cat===state.category.toLowerCase())&&(!set||title.includes(set))&&(!grade||(grade==="RAW"?cat==="raw":title.includes(grade.toLowerCase())))&&(!condition||(condition==="FACTORY"?/factory sealed|sealed/.test(title):String(item.condition||"").toUpperCase().includes(condition)));});
- $("#resultCount").textContent=visible.length+" listings"+(state.query?' for “'+state.query+'”':"");
+ if(!items.length){
+  $("#listingGrid").innerHTML='<div class="empty"><strong>'+(isEnding?"No auctions currently closing in the next "+state.endingWindow+" minutes":isFeed?"No Buy It Now listings loaded yet":"No listings loaded yet")+'</strong>'+(isEnding?"Try the 10-minute window or refresh. Only confirmed countdowns are shown.":isFeed?"eBay may be returning no matches right now. Try refreshing or choosing another marketplace.":"Search a card, set or sealed product above.")+'</div>';
+  $("#resultCount").textContent="0 listings";
+  if(isFeed)$("#discoverPageLabel").textContent="0 / 0";
+  return;
+ }
+ let visible=items.filter(item=>{const title=String(item.title||"").toLowerCase(),cat=category(item).toLowerCase(),set=$("#setFilter").value.toLowerCase(),grade=$("#gradeFilter").value,condition=$("#conditionFilter").value;return (state.category==="ALL"||cat===state.category.toLowerCase())&&(!set||title.includes(set))&&(!grade||(grade==="RAW"?cat==="raw":title.includes(grade.toLowerCase())))&&(!condition||(condition==="FACTORY"?/factory sealed|sealed/.test(title):String(item.condition||"").toUpperCase().includes(condition)));});
+ if(isFeed){
+  if(state.tcgFocus!=="ALL")visible=visible.filter(item=>item.tcg===state.tcgFocus);
+  const count=visible.length,pages=Math.max(1,Math.ceil(count/12));
+  state.discoverPage=((state.discoverPage%pages)+pages)%pages;
+  $("#discoverPageLabel").textContent=count?(state.discoverPage+1)+" / "+pages:"0 / 0";
+  $("#discoverPrev").disabled=pages<2;$("#discoverNext").disabled=pages<2;
+  visible=visible.slice(state.discoverPage*12,state.discoverPage*12+12);
+  $("#resultCount").textContent=visible.length+" of "+count+" live Buy It Now listings";
+ }else $("#resultCount").textContent=visible.length+(isEnding?" auctions closing within "+state.endingWindow+" minutes":" listings")+(state.mode==="search"&&state.query?' for “'+state.query+'”':"");
  $("#listingGrid").classList.toggle("list-view",state.view==="list");
  $("#listingGrid").innerHTML=visible.map(item=>{
  const auction=(item.buyingOptions||[]).includes("AUCTION"),cat=category(item),condition=String(item.condition||"").trim();
@@ -74,7 +93,7 @@ function render(){
  const conditionPill=conditionText==="NEW FACTORY SEALED"?'<img class="condition-overlay" src="/assets/overlays/factory-sealed.webp" alt="New factory sealed" loading="lazy">':/^NEW\b/.test(conditionText)?'<img class="condition-overlay" src="/assets/overlays/new.webp" alt="New" loading="lazy">':'<span>'+esc(conditionText||"CONDITION NOT SUPPLIED")+'</span>';
  const gradeBrand=grade?grade[0].match(/^(PSA|BGS)\b/i):null;
  const gradePill=grade?(gradeBrand?'<span class="grade-badge grade-image-badge"><img src="/assets/overlays/'+gradeBrand[1].toLowerCase()+'.webp" alt="'+gradeBrand[1]+'" loading="lazy"><strong>'+esc(grade[0].replace(/^(PSA|BGS)\b\s*/i,""))+'</strong></span>':'<span class="grade-badge">'+esc(grade[0].toUpperCase())+'</span>'):'';
- return '<article class="listing-card type-'+cat.toLowerCase()+'"><div class="listing-image">'+image+'<div class="image-tags overlay-tags"><span class="category-badge asset-badge"><img src="/assets/overlays/'+cat.toLowerCase()+'.webp" alt="'+esc(cat)+'" loading="lazy"></span><span class="sale-badge asset-badge '+(auction?"is-auction":"")+'"><img src="/assets/overlays/'+(auction?"auction":"buy-now")+'.webp" alt="'+(auction?"Auction":"Buy now")+'" loading="lazy"></span></div>'+(url?'<a class="watch-button" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" title="Watch on eBay" aria-label="Watch on eBay">☆</a>':'')+gradePill+'</div><div class="listing-body"><h3 class="listing-title" title="'+esc(item.title)+'">'+esc(item.title)+'</h3><p class="listing-condition">'+conditionPill+'</p><div class="price-row"><div><small>'+(auction?(item.bids===0?"STARTING BID":"CURRENT BID"):"LISTED PRICE")+'</small><span class="price">'+money(item.price,item.currency)+'</span></div><span class="currency-tag">'+esc(item.currency||"AUD")+'</span></div>'+time+'<div class="listing-meta"><span>⌖ '+esc(item.location||"Location unavailable")+'</span><span>'+esc(item.marketplace||"")+'</span></div><div class="card-actions">'+(url?'<a class="ebay-link custom-ebay-link" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" aria-label="View this item on eBay"><img src="/assets/controls/view-ebay.webp" alt="View eBay listing" loading="lazy"></a>':'<span class="ebay-link unavailable">eBay listing link unavailable</span>')+'</div></div></article>';
+ return '<article class="listing-card type-'+cat.toLowerCase()+'"><div class="listing-image">'+image+'<div class="image-tags overlay-tags"><span class="category-badge asset-badge"><img src="/assets/overlays/'+cat.toLowerCase()+'.webp" alt="'+esc(cat)+'" loading="lazy"></span><span class="sale-badge asset-badge '+(auction?"is-auction":"")+'"><img src="/assets/overlays/'+(auction?"auction":"buy-now")+'.webp" alt="'+(auction?"Auction":"Buy now")+'" loading="lazy"></span></div>'+(url?'<a class="watch-button" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" title="Watch on eBay" aria-label="Watch on eBay">☆</a>':'')+gradePill+'</div><div class="listing-body">'+(item.tcgLabel?'<span class="tcg-product-label">'+esc(item.tcgLabel)+'</span>':"")+'<h3 class="listing-title" title="'+esc(item.title)+'">'+esc(item.title)+'</h3><p class="listing-condition">'+conditionPill+'</p><div class="price-row"><div><small>'+(auction?(item.bids===0?"STARTING BID":"CURRENT BID"):"LISTED PRICE")+'</small><span class="price">'+money(item.price,item.currency)+'</span></div><span class="currency-tag">'+esc(item.currency||"AUD")+'</span></div>'+time+'<div class="listing-meta"><span>⌖ '+esc(item.location||"Location unavailable")+'</span><span>'+esc(item.marketplace||"")+'</span></div><div class="card-actions">'+(url?'<a class="ebay-link custom-ebay-link" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" aria-label="View this item on eBay"><img src="/assets/controls/view-ebay.webp" alt="View eBay listing" loading="lazy"></a>':'<span class="ebay-link unavailable">eBay listing link unavailable</span>')+'</div></div></article>';
  }).join("");
 }
 function category(item){const t=String(item.title||"").toLowerCase();if(/\b(psa|bgs|cgc|sgc|ace)\s*(?:gem mint\s*)?(?:10|9\.5|9|8\.5|8|7|6)\b|graded|slabbed/.test(t))return "GRADED";if(/booster box|elite trainer box|\betb\b|booster pack|sealed|blister|collection box|tin\b|display box|case of|bundle/.test(t))return "SEALED";return "RAW";}
@@ -86,6 +105,7 @@ $("#spotPrev").addEventListener("click",()=>moveSpotlight(-1));$("#spotNext").ad
 $("#spotWindow").addEventListener("mouseenter",()=>state.spotPaused=true);$("#spotWindow").addEventListener("mouseleave",()=>state.spotPaused=false);$("#spotWindow").addEventListener("touchstart",event=>{state.spotTouchX=event.touches[0].clientX;state.spotPaused=true;},{passive:true});$("#spotWindow").addEventListener("touchend",event=>{if(state.spotTouchX!=null){const delta=event.changedTouches[0].clientX-state.spotTouchX;if(Math.abs(delta)>45)moveSpotlight(delta<0?1:-1);}state.spotTouchX=null;state.spotPaused=false;},{passive:true});
 setInterval(()=>{if(!state.spotPaused&&!document.hidden)moveSpotlight(1);},6500);loadSpotlight();
 async function search(){
+ state.mode="search";state.tab="discover";document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.tab==="discover"));
  const q=$("#searchInput").value.trim();if(!q){$("#status").textContent="Enter a Pokémon, card name, set or product to search eBay.";return;}
  state.query=q;$("#searchBtn").disabled=true;$("#searchBtn").classList.add("searching");$("#searchBtn").setAttribute("aria-label","Searching listings");$("#status").classList.remove("error");$("#status").textContent="Connecting to eBay Browse API…";
  const p=new URLSearchParams({q,marketplace:$("#marketplace").value,type:$("#listingType").value,sort:$("#sortBy").value,limit:"36"});
@@ -95,7 +115,20 @@ async function search(){
  finally{$("#searchBtn").disabled=false;$("#searchBtn").classList.remove("searching");$("#searchBtn").setAttribute("aria-label","Search listings");}
 }
 document.addEventListener("click",event=>{
- const categoryBtn=event.target.closest("[data-category]");if(categoryBtn){state.category=categoryBtn.dataset.category;document.querySelectorAll("[data-category]").forEach(x=>x.classList.toggle("active",x===categoryBtn));render();return;}const viewBtn=event.target.closest("[data-view]");if(viewBtn){state.view=viewBtn.dataset.view;document.querySelectorAll("[data-view]").forEach(x=>x.classList.toggle("active",x===viewBtn));$(".custom-grid-list").dataset.active=state.view;render();return;}const tab=event.target.closest("[data-tab]");if(tab){state.tab=tab.dataset.tab;document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===tab));if(state.tab==="sold")$("#status").textContent="Sold-history access is not enabled until an approved eBay data source is connected.";render();return;}
+ const categoryBtn=event.target.closest("[data-category]");if(categoryBtn){state.category=categoryBtn.dataset.category;state.discoverPage=0;document.querySelectorAll("[data-category]").forEach(x=>x.classList.toggle("active",x===categoryBtn));render();return;}const viewBtn=event.target.closest("[data-view]");if(viewBtn){state.view=viewBtn.dataset.view;document.querySelectorAll("[data-view]").forEach(x=>x.classList.toggle("active",x===viewBtn));$(".custom-grid-list").dataset.active=state.view;render();return;}const tab=event.target.closest("[data-tab]");if(tab){
+  state.tab=tab.dataset.tab;
+  document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===tab));
+  if(state.tab==="discover"){
+   state.mode="feed";state.query="";$("#searchInput").value="";state.items=state.discoverItems;state.discoverPage=0;
+   render();void loadDiscovery();
+  }else if(state.tab==="ending"){
+   state.mode="ending";state.query="";state.items=state.endingItems;
+   render();void loadEndingSoon();
+  }else{
+   $("#status").textContent="Sold-history access is not enabled until an approved eBay data source is connected.";render();
+  }
+  return;
+ }
 
  const saved=event.target.closest("[data-saved-index]");if(saved){const s=state.savedSearches[Number(saved.dataset.savedIndex)];if(s){$("#searchInput").value=s.query;$("#marketplace").value=s.marketplace;$("#listingType").value=s.type;$("#sortBy").value=s.sort;$("#shipFrom").value=s.shipFrom||"ANY";$("#shipsTo").value=s.shipsTo||"ANY";$("#minPrice").value=s.minPrice;$("#maxPrice").value=s.maxPrice;["setFilter","gradeFilter","conditionFilter"].forEach(id=>$("#"+id).value="");appliedFilters=readFilterValues();updateFilterSummary();state.tab="discover";document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.tab==="discover"));search();}return;}
  const tag=event.target.closest("[data-query]");if(tag){$("#searchInput").value=tag.dataset.query;search();}
@@ -185,7 +218,10 @@ function applySearchFilters(){
   state.category="ALL";
   document.querySelectorAll("[data-category]").forEach(x=>x.classList.toggle("active",x.dataset.category==="ALL"));
  }
- if(state.query)void search();else render();
+ if(state.tab==="ending")void loadEndingSoon(true);
+ else if(state.mode==="feed")void loadDiscovery(true);
+ else if(state.query)void search();
+ else render();
  if(previous.shipFrom!==next.shipFrom||previous.shipsTo!==next.shipsTo)void loadSpotlight();
 }
 $("#filterToggle").addEventListener("click",()=>setFiltersOpen($("#filtersContent").classList.contains("hidden")));

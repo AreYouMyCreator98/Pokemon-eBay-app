@@ -37,7 +37,7 @@ async function handleAuthSession(session){
  if(session?.user){try{await loadCloudData(session.user);}catch(error){cloudUser=session.user;cloudReady=false;setAccountMessage("Signed in, but cloud data could not load: "+error.message,true);}}
  else{cloudUser=null;cloudReady=false;state.watchlist=[];state.savedSearches=[];localStorage.removeItem("pokemarket-watchlist");localStorage.removeItem("pokemarket-searches");$("#authForm").classList.remove("hidden");$("#signedInActions").classList.add("hidden");$("#accountTitle").textContent="Your account";$("#accountBtn").textContent="Sign in";setAccountMessage("Sign in to sync your saved searches across devices.");render();}
 }
-const state={tab:"discover",view:"grid",category:"ALL",items:[],query:"",watchlist:[],savedSearches:load("pokemarket-searches",[]).map(x=>typeof x==="string"?{id:x,query:x,marketplace:"AU",type:"ALL",sort:"endingSoonest",minPrice:"",maxPrice:""}:x),alerted:[]};
+const state={featured:[],featureIndex:0,tab:"discover",view:"grid",category:"ALL",items:[],query:"",watchlist:[],savedSearches:load("pokemarket-searches",[]).map(x=>typeof x==="string"?{id:x,query:x,marketplace:"AU",type:"ALL",sort:"endingSoonest",minPrice:"",maxPrice:""}:x),alerted:[]};
 function load(key,fallback){try{return JSON.parse(localStorage.getItem(key))??fallback;}catch{return fallback;}}
 // Remove previously cached eBay seller details, including older watchlist snapshots.
 for(const key of ["pokemarket-last-items","pokemarket-alerted","pokemarket-watchlist"])localStorage.removeItem(key);
@@ -56,7 +56,7 @@ function renderSavedSearches(){
 function render(){
  renderSavedSearches();
  const sold=state.tab==="sold";$("#soldNotice").classList.toggle("hidden",!sold);$("#listingGrid").classList.toggle("hidden",sold);
- const labels={discover:["LIVE MARKETPLACE","Featured listings"],ending:["AUCTION RADAR","Ending soon"],sold:["MARKET HISTORY","Recently sold"]};
+ const labels={discover:["LIVE MARKETPLACE","Marketplace listings"],ending:["AUCTION RADAR","Ending soon"],sold:["MARKET HISTORY","Recently sold"]};
  $("#sectionEyebrow").textContent=labels[state.tab][0];$("#sectionTitle").textContent=labels[state.tab][1];
  if(sold){$("#resultCount").textContent="Verified data pending";return;}
  const items=visibleItems();$("#resultCount").textContent=items.length?items.length+" live listings":"Ready to search";
@@ -75,6 +75,12 @@ function render(){
  }).join("");
 }
 function category(item){const t=String(item.title||"").toLowerCase();if(/\b(psa|bgs|cgc|sgc|ace)\s*(?:gem mint\s*)?(?:10|9\.5|9|8\.5|8|7|6)\b|graded|slabbed/.test(t))return "GRADED";if(/booster box|elite trainer box|\betb\b|booster pack|sealed|blister|collection box|tin\b|display box|case of|bundle/.test(t))return "SEALED";return "RAW";}
+function spotlightCard(item){const url=/^https:\/\/www\.ebay\.(com\.au|com)\//i.test(item.url||"")?item.url:"";const image=item.image?'<img src="'+esc(item.image)+'" alt="" loading="lazy" referrerpolicy="no-referrer">':'<span class="spotlight-fallback">✦</span>';return '<article class="spotlight-item"><div class="spotlight-photo">'+image+'</div><div class="spotlight-info"><span class="spotlight-tag">⚡ AUCTION • '+esc(category(item))+'</span><h3>'+esc(item.title)+'</h3><div class="spotlight-price">'+money(item.price,item.currency)+'</div><div class="spotlight-time">◷ <span class="countdown" data-end="'+esc(item.endTime||"")+'">'+esc(remaining(item.endTime))+'</span></div>'+(url?'<a class="spotlight-link" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer">VIEW EBAY LISTING ↗</a>':'')+'</div></article>';}
+function moveSpotlight(direction=1){const count=state.featured.length;if(!count)return;state.featureIndex=(state.featureIndex+direction+count)%count;const track=$("#spotTrack");track.style.transform="translateX(-"+(state.featureIndex*100)+"%)";$("#spotProgress").innerHTML=state.featured.map((_,i)=>'<span class="'+(i===state.featureIndex?"active":"")+'"></span>').join("");}
+async function loadSpotlight(){try{const p=new URLSearchParams({q:"pokemon trading card",marketplace:$("#marketplace").value,type:"AUCTION",sort:"endingSoonest",limit:"24"});const response=await fetch("/api/search?"+p);if(!response.ok)throw Error("Auction feed unavailable");const data=await response.json();state.featured=(data.items||[]).filter(x=>(x.buyingOptions||[]).includes("AUCTION")&&x.endTime&&new Date(x.endTime)>new Date()&&x.url).sort((a,b)=>new Date(a.endTime)-new Date(b.endTime)).slice(0,12);state.featureIndex=0;$("#spotTrack").innerHTML=state.featured.length?state.featured.map(spotlightCard).join(""):'<div class="spotlight-loading">No ending-soon auctions returned right now. Try searching below.</div>';$("#spotTrack").style.transform="translateX(0)";moveSpotlight(0);}catch(error){$("#spotTrack").innerHTML='<div class="spotlight-loading">Live auction highlights are temporarily unavailable. Search below for current listings.</div>';}}
+$("#spotPrev").addEventListener("click",()=>moveSpotlight(-1));$("#spotNext").addEventListener("click",()=>moveSpotlight(1));
+$("#spotWindow").addEventListener("mouseenter",()=>state.spotPaused=true);$("#spotWindow").addEventListener("mouseleave",()=>state.spotPaused=false);$("#spotWindow").addEventListener("touchstart",event=>{state.spotTouchX=event.touches[0].clientX;state.spotPaused=true;},{passive:true});$("#spotWindow").addEventListener("touchend",event=>{if(state.spotTouchX!=null){const delta=event.changedTouches[0].clientX-state.spotTouchX;if(Math.abs(delta)>45)moveSpotlight(delta<0?1:-1);}state.spotTouchX=null;state.spotPaused=false;},{passive:true});
+setInterval(()=>{if(!state.spotPaused&&!document.hidden)moveSpotlight(1);},6500);loadSpotlight();
 async function search(){
  const q=$("#searchInput").value.trim();if(!q){$("#status").textContent="Enter a Pokémon, card name, set or product to search eBay.";return;}
  state.query=q;$("#searchBtn").disabled=true;$("#searchBtn").textContent="Searching…";$("#status").classList.remove("error");$("#status").textContent="Connecting to eBay Browse API…";

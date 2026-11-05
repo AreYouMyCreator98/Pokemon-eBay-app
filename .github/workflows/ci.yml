@@ -1,0 +1,29 @@
+name: POKEMARKET checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check JavaScript syntax
+        run: npm run check
+      - name: Check manifest JSON
+        run: node -e "JSON.parse(require('fs').readFileSync('public/manifest.webmanifest','utf8'))"
+      - name: Smoke test server routes
+        run: |
+          npm start > /tmp/pokemarket.log 2>&1 &
+          SERVER_PID=$!
+          trap "kill $SERVER_PID" EXIT
+          for i in {1..20}; do
+            if curl -fsS http://localhost:3000/api/health; then break; fi
+            sleep 1
+          done
+          curl -fsS http://localhost:3000/api/sold | grep -q '"available":false'
+          curl -fsS http://localhost:3000/ | grep -q 'POKÉMARKET'

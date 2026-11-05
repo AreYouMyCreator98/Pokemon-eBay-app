@@ -81,7 +81,7 @@ function category(item){const t=String(item.title||"").toLowerCase();if(/\b(psa|
 function spotlightCard(item){const url=/^https:\/\/www\.ebay\.(com\.au|com)\//i.test(item.url||"")?item.url:"";const image=item.image?'<img src="'+esc(item.image)+'" alt="" loading="lazy" referrerpolicy="no-referrer">':'<span class="spotlight-fallback">✦</span>';return '<article class="spotlight-item"><div class="spotlight-photo">'+image+'</div><div class="spotlight-info"><span class="spotlight-tag overlay-spotlight-tag"><img src="/assets/overlays/auction.webp" alt="Auction" loading="lazy"><img src="/assets/overlays/'+category(item).toLowerCase()+'.webp" alt="'+esc(category(item))+'" loading="lazy"></span><h3>'+esc(item.title)+'</h3><div class="spotlight-price">'+money(item.price,item.currency)+'</div><div class="spotlight-time overlay-spotlight-time"><img src="/assets/overlays/time-left.webp" alt="Time left" loading="lazy"><span class="countdown" data-end="'+esc(item.endTime||"")+'">'+esc(remaining(item.endTime))+'</span></div>'+(url?'<a class="spotlight-link custom-ebay-link" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" aria-label="View this item on eBay"><img src="/assets/controls/view-ebay.webp" alt="View eBay listing" loading="lazy"></a>':'')+'</div></article>';}
 function moveSpotlight(direction=1){const count=state.featured.length;if(!count)return;state.featureIndex=(state.featureIndex+direction+count)%count;const track=$("#spotTrack");track.style.transform="translateX(-"+(state.featureIndex*100)+"%)";$("#spotProgress").innerHTML=state.featured.map((_,i)=>'<span class="'+(i===state.featureIndex?"active":"")+'"></span>').join("");}
 async function loadSpotlight(){try{const p=new URLSearchParams({q:"pokemon trading card",marketplace:"AU",type:"AUCTION",sort:"endingSoonest",limit:"50"});if($("#shipFrom").value!=="ANY")p.set("shipFrom",$("#shipFrom").value);if($("#shipsTo").value!=="ANY")p.set("shipsTo",$("#shipsTo").value);const response=await fetch("/api/search?"+p);if(!response.ok)throw Error("Auction feed unavailable");const data=await response.json();state.featured=(data.items||[]).filter(x=>(x.buyingOptions||[]).includes("AUCTION")&&x.endTime&&new Date(x.endTime)>new Date()&&x.url).sort((a,b)=>new Date(a.endTime)-new Date(b.endTime)).slice(0,12);state.featureIndex=0;$("#spotTrack").innerHTML=state.featured.length?state.featured.map(spotlightCard).join(""):'<div class="spotlight-loading">No ending-soon auctions returned right now. Try searching below.</div>';$("#spotTrack").style.transform="translateX(0)";moveSpotlight(0);}catch(error){$("#spotTrack").innerHTML='<div class="spotlight-loading">Live auction highlights are temporarily unavailable. Search below for current listings.</div>';}}
-$("#shipFrom").addEventListener("change",loadSpotlight);$("#shipsTo").addEventListener("change",loadSpotlight);
+// Auction highlights refresh only after the user applies country filters.
 $("#spotPrev").addEventListener("click",()=>moveSpotlight(-1));$("#spotNext").addEventListener("click",()=>moveSpotlight(1));
 $("#spotWindow").addEventListener("mouseenter",()=>state.spotPaused=true);$("#spotWindow").addEventListener("mouseleave",()=>state.spotPaused=false);$("#spotWindow").addEventListener("touchstart",event=>{state.spotTouchX=event.touches[0].clientX;state.spotPaused=true;},{passive:true});$("#spotWindow").addEventListener("touchend",event=>{if(state.spotTouchX!=null){const delta=event.changedTouches[0].clientX-state.spotTouchX;if(Math.abs(delta)>45)moveSpotlight(delta<0?1:-1);}state.spotTouchX=null;state.spotPaused=false;},{passive:true});
 setInterval(()=>{if(!state.spotPaused&&!document.hidden)moveSpotlight(1);},6500);loadSpotlight();
@@ -97,12 +97,13 @@ async function search(){
 document.addEventListener("click",event=>{
  const categoryBtn=event.target.closest("[data-category]");if(categoryBtn){state.category=categoryBtn.dataset.category;document.querySelectorAll("[data-category]").forEach(x=>x.classList.toggle("active",x===categoryBtn));render();return;}const viewBtn=event.target.closest("[data-view]");if(viewBtn){state.view=viewBtn.dataset.view;document.querySelectorAll("[data-view]").forEach(x=>x.classList.toggle("active",x===viewBtn));$(".custom-grid-list").dataset.active=state.view;render();return;}const tab=event.target.closest("[data-tab]");if(tab){state.tab=tab.dataset.tab;document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===tab));if(state.tab==="sold")$("#status").textContent="Sold-history access is not enabled until an approved eBay data source is connected.";render();return;}
 
- const saved=event.target.closest("[data-saved-index]");if(saved){const s=state.savedSearches[Number(saved.dataset.savedIndex)];if(s){$("#searchInput").value=s.query;$("#marketplace").value=s.marketplace;$("#listingType").value=s.type;$("#sortBy").value=s.sort;$("#shipFrom").value=s.shipFrom||"ANY";$("#shipsTo").value=s.shipsTo||"ANY";$("#minPrice").value=s.minPrice;$("#maxPrice").value=s.maxPrice;state.tab="discover";document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.tab==="discover"));search();}return;}
+ const saved=event.target.closest("[data-saved-index]");if(saved){const s=state.savedSearches[Number(saved.dataset.savedIndex)];if(s){$("#searchInput").value=s.query;$("#marketplace").value=s.marketplace;$("#listingType").value=s.type;$("#sortBy").value=s.sort;$("#shipFrom").value=s.shipFrom||"ANY";$("#shipsTo").value=s.shipsTo||"ANY";$("#minPrice").value=s.minPrice;$("#maxPrice").value=s.maxPrice;["setFilter","gradeFilter","conditionFilter"].forEach(id=>$("#"+id).value="");appliedFilters=readFilterValues();updateFilterSummary();state.tab="discover";document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.tab==="discover"));search();}return;}
  const tag=event.target.closest("[data-query]");if(tag){$("#searchInput").value=tag.dataset.query;search();}
 });
-["setFilter","gradeFilter","conditionFilter"].forEach(id=>$("#"+id).addEventListener("change",render));$("#clearFilters").addEventListener("click",()=>{["setFilter","gradeFilter","conditionFilter"].forEach(id=>$("#"+id).value="");["minPrice","maxPrice"].forEach(id=>$("#"+id).value="");["shipFrom","shipsTo"].forEach(id=>$("#"+id).value="ANY");$("#listingType").value="ALL";state.category="ALL";document.querySelectorAll("[data-category]").forEach(x=>x.classList.toggle("active",x.dataset.category==="ALL"));if(state.query)search();else render();loadSpotlight();});
+// Filter fields are staged in the dropdown and do not trigger requests until Apply is tapped.
+$("#clearFilters").addEventListener("click",()=>{writeFilterValues(FILTER_DEFAULTS);resetCategoryOnApply=true;$("#filterError").classList.add("hidden");});
 $("#searchBtn").addEventListener("click",search);$("#searchInput").addEventListener("keydown",e=>{if(e.key==="Enter")search();});
-["marketplace","listingType","sortBy","shipFrom","shipsTo","minPrice","maxPrice"].forEach(id=>$("#"+id).addEventListener("change",()=>{if(state.query)search();}));
+// Apply Filters now performs one search instead of a separate fetch per dropdown change.
 $("#saveSearchBtn").addEventListener("click",()=>{const q=$("#searchInput").value.trim();if(!q){$("#status").textContent="Search for something first, then save that search.";return;}const item={id:[q,$("#marketplace").value,$("#listingType").value,$("#sortBy").value,$("#shipFrom").value,$("#shipsTo").value,$("#minPrice").value,$("#maxPrice").value].join("|"),query:q,marketplace:$("#marketplace").value,type:$("#listingType").value,sort:$("#sortBy").value,shipFrom:$("#shipFrom").value,shipsTo:$("#shipsTo").value,minPrice:$("#minPrice").value,maxPrice:$("#maxPrice").value};state.savedSearches=state.savedSearches.filter(s=>s.id!==item.id);state.savedSearches.unshift(item);state.savedSearches=state.savedSearches.slice(0,12);save("pokemarket-searches",state.savedSearches);renderSavedSearches();$("#status").textContent="Saved complete search and filters on this device: "+q;});
 $("#notifyBtn").addEventListener("click",async()=>{if(!("Notification"in window)){ $("#status").textContent="This browser does not support notifications.";return;}const permission=await Notification.requestPermission();$("#status").textContent=permission==="granted"?"Auction alerts enabled while TCG Bid Buy Watch is open. Alerts only work while the app is open and are based on currently displayed auctions.":"Notifications were not enabled.";});
 function checkAlerts(){
@@ -134,8 +135,76 @@ $("#statsNavBtn").addEventListener("click",()=>{const open=$("#statsPanel").clas
 $("#infoNavBtn").addEventListener("click",()=>{const open=$("#infoPanel").classList.contains("hidden");setPanel("stats",false);setPanel("info",open);});
 $("#statsClose").addEventListener("click",()=>setPanel("stats",false));
 $("#infoClose").addEventListener("click",()=>setPanel("info",false));
-$("#filterToggle").addEventListener("click",()=>{const target=$("#filtersContent"),open=target.classList.contains("hidden");target.classList.toggle("hidden",!open);$("#filterToggle").setAttribute("aria-expanded",String(open));});
-document.addEventListener("keydown",event=>{if(event.key==="Escape"){setPanel("stats",false);setPanel("info",false);}});
+// Keep filter selections private until Apply, so using the dropdown doesn't repeatedly fetch from eBay.
+const FILTER_DEFAULTS=Object.freeze({shipFrom:"ANY",shipsTo:"ANY",marketplace:"AU",listingType:"ALL",sortBy:"endingSoonest",minPrice:"",maxPrice:"",setFilter:"",gradeFilter:"",conditionFilter:""});
+const FILTER_FIELDS=Object.keys(FILTER_DEFAULTS);
+function readFilterValues(){return Object.fromEntries(FILTER_FIELDS.map(id=>[id,$("#"+id).value]));}
+function writeFilterValues(values){for(const id of FILTER_FIELDS)$("#"+id).value=values[id]??FILTER_DEFAULTS[id];}
+let appliedFilters=readFilterValues();
+let resetCategoryOnApply=false;
+function updateFilterSummary(){
+ const active=FILTER_FIELDS.filter(id=>appliedFilters[id]!==FILTER_DEFAULTS[id]);
+ const names={shipFrom:"From",shipsTo:"Ships to",marketplace:"Market",listingType:"Type",sortBy:"Sort",minPrice:"Min",maxPrice:"Max",setFilter:"Set",gradeFilter:"Grade",conditionFilter:"Condition"};
+ const chosen=active.map(id=>{
+  const field=$("#"+id);
+  const value=(field.tagName==="SELECT"?field.selectedOptions[0]?.textContent:field.value)||appliedFilters[id];
+  return names[id]+": "+String(value).trim();
+ });
+ $("#filterSummaryText").textContent=active.length?active.length+" active filter"+(active.length===1?"":"s")+" · "+chosen.slice(0,2).join(" · ")+(chosen.length>2?" · +"+(chosen.length-2)+" more":""):"All listings · Worldwide · eBay Australia";
+ $("#filterSummary").classList.toggle("has-active",active.length>0);
+ $("#filterToggle").setAttribute("aria-label",active.length?"Open search filters, "+active.length+" active":"Open search filters");
+}
+function setFiltersOpen(open){
+ const dialog=$("#filtersContent");
+ if(open){
+  writeFilterValues(appliedFilters);
+  resetCategoryOnApply=false;
+  $("#filterError").classList.add("hidden");
+ }
+ dialog.classList.toggle("hidden",!open);
+ $("#filtersBackdrop").classList.toggle("hidden",!open);
+ document.body.classList.toggle("filters-open",open);
+ $("#filterToggle").setAttribute("aria-expanded",String(open));
+ if(open)dialog.focus({preventScroll:true});
+ else{writeFilterValues(appliedFilters);$("#filterToggle").focus({preventScroll:true});}
+}
+function applySearchFilters(){
+ const next=readFilterValues();
+ if(next.minPrice!==""&&next.maxPrice!==""&&Number(next.minPrice)>Number(next.maxPrice)){
+  $("#filterError").textContent="Minimum price cannot be higher than maximum price.";
+  $("#filterError").classList.remove("hidden");
+  $("#minPrice").focus();
+  return;
+ }
+ const previous=appliedFilters,resetCategory=resetCategoryOnApply;
+ appliedFilters=next;
+ updateFilterSummary();
+ setFiltersOpen(false);
+ resetCategoryOnApply=false;
+ if(resetCategory){
+  state.category="ALL";
+  document.querySelectorAll("[data-category]").forEach(x=>x.classList.toggle("active",x.dataset.category==="ALL"));
+ }
+ if(state.query)void search();else render();
+ if(previous.shipFrom!==next.shipFrom||previous.shipsTo!==next.shipsTo)void loadSpotlight();
+}
+$("#filterToggle").addEventListener("click",()=>setFiltersOpen($("#filtersContent").classList.contains("hidden")));
+$("#filterSummary").addEventListener("click",()=>setFiltersOpen(true));
+$("#filtersBackdrop").addEventListener("click",()=>setFiltersOpen(false));
+$("#filterClose").addEventListener("click",()=>setFiltersOpen(false));
+$("#cancelFilters").addEventListener("click",()=>setFiltersOpen(false));
+$("#applyFilters").addEventListener("click",applySearchFilters);
+$("#filtersContent").addEventListener("keydown",event=>{
+ if(event.key==="Enter"&&event.target.tagName==="INPUT"){event.preventDefault();applySearchFilters();}
+ if(event.key!=="Tab")return;
+ const focusable=[...$("#filtersContent").querySelectorAll("button:not([disabled]),select:not([disabled]),input:not([disabled])")].filter(el=>el.getClientRects().length);
+ if(!focusable.length)return;
+ const first=focusable[0],last=focusable[focusable.length-1];
+ if(event.shiftKey&&(document.activeElement===first||document.activeElement===$("#filtersContent"))){event.preventDefault();last.focus();}
+ else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+});
+document.addEventListener("keydown",event=>{if(event.key==="Escape"){if(!$("#filtersContent").classList.contains("hidden"))setFiltersOpen(false);setPanel("stats",false);setPanel("info",false);}});
+updateFilterSummary();
 
 $("#accountBtn").addEventListener("click",openAccount);$("#accountClose").addEventListener("click",closeAccount);
 $("#authToggle").addEventListener("click",()=>{authMode=authMode==="signin"?"signup":"signin";$("#authSubmit").textContent=authMode==="signin"?"Sign in":"Create account";$("#authToggle").textContent=authMode==="signin"?"Create account":"Back to sign in";$("#authPassword").setAttribute("autocomplete",authMode==="signin"?"current-password":"new-password");setAccountMessage(authMode==="signup"?"Create an account with your email and a password. Check your email if confirmation is required.":"Sign in to sync your collector data.");});

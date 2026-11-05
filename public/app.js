@@ -249,12 +249,13 @@ async function search(){
   if(!response.ok)throw new Error(data.error||"Search failed");
   state.items=data.items||[];
   const meta=data.searchMeta||{};
+  const correctionNote=meta.interpretedAs?" · Interpreted as “"+meta.interpretedAs+"”":meta.corrected?" · eBay corrected to “"+meta.corrected+"”":"";
   if(!state.items.length){
    $("#status").textContent="No live eBay matches for “"+q+"” after checking product variations. Try another marketplace, adjust your filters, or simplify the product name.";
   }else if(meta.expanded){
-   $("#status").textContent="Smart search found "+state.items.length+" relevant listings for “"+q+"” using related product names"+(meta.corrected?" · eBay corrected to “"+meta.corrected+"”":"")+" · Updated "+new Date(data.fetchedAt).toLocaleTimeString();
+   $("#status").textContent="Smart search found "+state.items.length+" relevant listings for “"+q+"” using related product names"+correctionNote+" · Updated "+new Date(data.fetchedAt).toLocaleTimeString();
   }else{
-   $("#status").textContent="Found "+state.items.length+" live eBay listings for “"+q+"”"+(meta.corrected?" · eBay corrected to “"+meta.corrected+"”":"")+" · Updated "+new Date(data.fetchedAt).toLocaleTimeString();
+   $("#status").textContent="Found "+state.items.length+" live eBay listings for “"+q+"”"+correctionNote+" · Updated "+new Date(data.fetchedAt).toLocaleTimeString();
   }
   render();
  }catch(error){

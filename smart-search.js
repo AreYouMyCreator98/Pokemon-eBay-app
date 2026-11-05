@@ -50,7 +50,8 @@ const has=(text,word)=>new RegExp("\\b"+norm(word)+"(?:s|es)?\\b").test(text);
 export function scoreSearchItem(item,plan){
  const title=norm(item.title||""),original=norm(plan.original);
  if(!title)return -1;
- const words=[...new Set(simplify(original).split(" ").filter(Boolean))];
+ const intentWords=norm(simplify(original)).replace(/\bprismatic evo\b/g,"prismatic evolutions").replace(/\bevo skies\b/g,"evolving skies");
+ const words=[...new Set(intentWords.split(" ").filter(Boolean))];
  const core=words.filter(w=>!STOP.has(w)&&!OPTIONAL.has(w)&&!PRODUCT.has(w)&&!/^\d{1,2}$/.test(w));
  const matched=core.filter(w=>has(title,w));
  if(core.length&&!matched.length)return -1;

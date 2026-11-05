@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
 const supabase=createClient("https://prxvxomflqzviqiktcgr.supabase.co","sb_publishable_WrQ8yUaSj-z6nsx_-r9FGw_e1CkhXtc");
 const $=s=>document.querySelector(s);
 // Do not persist eBay seller identifiers or seller location in saved listing snapshots.
-function safeSnapshot(item){if(!item||typeof item!=="object")return null;const keys=["id","title","image","price","currency","condition","endTime","bids","buyingOptions","url","marketplace"];return Object.fromEntries(keys.filter(k=>Object.prototype.hasOwnProperty.call(item,k)).map(k=>[k,item[k]]));}
+function safeSnapshot(item){if(!item||typeof item!=="object")return null;const url=String(item.url||"");if(!/^https:\/\/www\.ebay\.(com\.au|com)\/itm\//i.test(url))return null;return {id:url,url};}
 let cloudUser=null,cloudReady=false,authMode="signin",syncBusy=false;
 function setAccountMessage(message,error=false){$("#accountMessage").textContent=message;$("#accountMessage").classList.toggle("error",error);}
 function openAccount(){$("#accountPanel").classList.remove("hidden");}
@@ -11,7 +11,7 @@ async function syncCollection(key,value){
  if(!cloudUser||!cloudReady||syncBusy)return;syncBusy=true;
  try{
   if(key==="pokemarket-watchlist"){
-   const rows=value.filter(x=>x&&typeof x==="object"&&x.id).map(x=>({user_id:cloudUser.id,item_id:String(x.id),item_url:x.url||null,item_title:x.title||"",item_snapshot:safeSnapshot(x)}));
+   const rows=value.filter(x=>x&&typeof x==="object"&&x.id).map(x=>({user_id:cloudUser.id,item_id:String(x.id),item_url:x.url||null,item_title:"",item_snapshot:{}}));
    const del=await supabase.from("user_watchlist").delete().eq("user_id",cloudUser.id);if(del.error)throw del.error;
    if(rows.length){const ins=await supabase.from("user_watchlist").insert(rows);if(ins.error)throw ins.error;}
   }else if(key==="pokemarket-searches"){
@@ -26,11 +26,11 @@ async function loadCloudData(user){
  const [w,s]=await Promise.all([supabase.from("user_watchlist").select("item_id,item_snapshot,created_at").eq("user_id",user.id).order("created_at",{ascending:false}),supabase.from("user_saved_searches").select("search_key,query,marketplace,listing_type,sort_by,min_price,max_price,created_at").eq("user_id",user.id).order("created_at",{ascending:false})]);
  if(w.error)throw w.error;if(s.error)throw s.error;
  const localWatch=state.watchlist.map(safeSnapshot).filter(Boolean),localSearch=state.savedSearches;
- if(!w.data.length&&localWatch.length){const rows=localWatch.map(x=>({user_id:user.id,item_id:String(x.id),item_url:x.url||null,item_title:x.title||"",item_snapshot:x}));const m=await supabase.from("user_watchlist").upsert(rows,{onConflict:"user_id,item_id"});if(m.error)throw m.error;}
+ if(!w.data.length&&localWatch.length){const rows=localWatch.map(x=>({user_id:user.id,item_id:String(x.id),item_url:x.url||null,item_title:"",item_snapshot:{}}));const m=await supabase.from("user_watchlist").upsert(rows,{onConflict:"user_id,item_id"});if(m.error)throw m.error;}
  if(!s.data.length&&localSearch.length){const rows=localSearch.map(x=>({user_id:user.id,search_key:String(x.id),query:x.query,marketplace:x.marketplace,listing_type:x.type,sort_by:x.sort,min_price:x.minPrice===""?null:Number(x.minPrice),max_price:x.maxPrice===""?null:Number(x.maxPrice)}));const m=await supabase.from("user_saved_searches").upsert(rows,{onConflict:"user_id,search_key"});if(m.error)throw m.error;}
- const [wr,sr]=await Promise.all([supabase.from("user_watchlist").select("item_snapshot").eq("user_id",user.id).order("created_at",{ascending:false}),supabase.from("user_saved_searches").select("search_key,query,marketplace,listing_type,sort_by,min_price,max_price").eq("user_id",user.id).order("created_at",{ascending:false})]);
+ const [wr,sr]=await Promise.all([supabase.from("user_watchlist").select("item_url").eq("user_id",user.id).order("created_at",{ascending:false}),supabase.from("user_saved_searches").select("search_key,query,marketplace,listing_type,sort_by,min_price,max_price").eq("user_id",user.id).order("created_at",{ascending:false})]);
  if(wr.error)throw wr.error;if(sr.error)throw sr.error;
- state.watchlist=wr.data.map(x=>safeSnapshot(x.item_snapshot)).filter(Boolean);state.savedSearches=sr.data.map(x=>({id:x.search_key,query:x.query,marketplace:x.marketplace,type:x.listing_type,sort:x.sort_by,minPrice:x.min_price==null?"":String(x.min_price),maxPrice:x.max_price==null?"":String(x.max_price)}));
+ state.watchlist=wr.data.map(x=>safeSnapshot({url:x.item_url})).filter(Boolean);state.savedSearches=sr.data.map(x=>({id:x.search_key,query:x.query,marketplace:x.marketplace,type:x.listing_type,sort:x.sort_by,minPrice:x.min_price==null?"":String(x.min_price),maxPrice:x.max_price==null?"":String(x.max_price)}));
  localStorage.setItem("pokemarket-watchlist",JSON.stringify(state.watchlist));localStorage.setItem("pokemarket-searches",JSON.stringify(state.savedSearches));
  cloudReady=true;render();$("#accountTitle").textContent="Collector account";$("#accountEmail").textContent=user.email||"Signed in";$("#authForm").classList.add("hidden");$("#signedInActions").classList.remove("hidden");$("#accountBtn").textContent="My account";setAccountMessage("Your watchlist and saved searches are syncing across devices.");
 }
@@ -48,8 +48,8 @@ function save(key,value){if(key==="pokemarket-watchlist")value=value.map(safeSna
 function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function money(v,c){return v==null?"Price unavailable":new Intl.NumberFormat(undefined,{style:"currency",currency:c||"AUD",maximumFractionDigits:2}).format(v);}
 function remaining(end){if(!end)return"Time not supplied";const ms=new Date(end).getTime()-Date.now();if(!Number.isFinite(ms))return"Time not supplied";if(ms<=0)return"Ended";const d=Math.floor(ms/86400000),h=Math.floor(ms%86400000/3600000),m=Math.floor(ms%3600000/60000),s=Math.floor(ms%60000/1000);return d?d+"d "+h+"h left":h?h+"h "+m+"m left":m+"m "+s+"s left";}
-function isSaved(item){return state.watchlist.some(x=>x&&typeof x==="object"&&x.id===item.id);}
-function visibleItems(){if(state.tab==="watchlist")return state.watchlist.filter(x=>x&&typeof x==="object");if(state.tab==="ending")return [...state.items].sort((a,b)=>new Date(a.endTime||8640000000000000)-new Date(b.endTime||8640000000000000));return state.items;}
+function isSaved(item){return state.watchlist.some(x=>x&&x.url===item.url);}
+function visibleItems(){if(state.tab==="watchlist")return state.watchlist.filter(x=>x&&x.url);if(state.tab==="ending")return [...state.items].sort((a,b)=>new Date(a.endTime||8640000000000000)-new Date(b.endTime||8640000000000000));return state.items;}
 function renderSavedSearches(){
  const host=$("#savedSearchTags");if(!host)return;
  host.innerHTML=state.savedSearches.map((s,i)=>'<button class="tag" data-saved-index="'+i+'">'+esc(s.query)+' · '+esc(s.marketplace)+' · '+esc(s.type)+' ↗</button>').join("");
@@ -60,7 +60,7 @@ function render(){
  const labels={discover:["LIVE MARKETPLACE","Featured listings"],ending:["AUCTION RADAR","Ending soon"],watchlist:["YOUR COLLECTION","Watchlist"],sold:["MARKET HISTORY","Recently sold"]};
  $("#sectionEyebrow").textContent=labels[state.tab][0];$("#sectionTitle").textContent=labels[state.tab][1];
  if(sold){$("#resultCount").textContent="Verified data pending";return;}
- const items=visibleItems();$("#resultCount").textContent=items.length?items.length+" listings":"No listings loaded";
+ const items=visibleItems();if(state.tab==="watchlist"){ $("#resultCount").textContent=items.length+" saved links";$("#listingGrid").innerHTML=items.length?items.map((item,i)=>'<article class="listing-card"><div class="listing-body"><h3 class="listing-title">Saved eBay listing #'+(i+1)+'</h3><p>Listing details are not stored. Open eBay to view the current card, price and auction status.</p><div class="card-actions"><a class="ebay-link" href="'+esc(item.url)+'" target="_blank" rel="noopener noreferrer">View this item on eBay ↗</a><button class="watch-button saved" data-watch="'+esc(item.url)+'">Remove ★</button></div></div></article>').join(""):'<div class="empty"><strong>Your watchlist is empty</strong>Save eBay listing links with the ☆ button.</div>';return;}$("#resultCount").textContent=items.length?items.length+" listings":"No listings loaded";
  if(!items.length){$("#listingGrid").innerHTML='<div class="empty"><strong>'+(state.tab==="watchlist"?"Your watchlist is empty":"Nothing to show yet")+'</strong>'+(state.tab==="watchlist"?"Save listings with the ☆ button.":"Search for a Pokémon, card, set or sealed product to get started.")+'</div>';return;}
  $("#listingGrid").innerHTML=items.map(item=>{
   const saved=isSaved(item),auction=(item.buyingOptions||[]).includes("AUCTION");
@@ -80,7 +80,7 @@ async function search(){
 }
 document.addEventListener("click",event=>{
  const tab=event.target.closest("[data-tab]");if(tab){state.tab=tab.dataset.tab;document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===tab));if(state.tab==="sold")$("#status").textContent="Sold-history access is not enabled until an approved eBay data source is connected.";render();return;}
- const watch=event.target.closest("[data-watch]");if(watch){const id=watch.dataset.watch;const existing=state.watchlist.find(x=>x&&typeof x==="object"&&x.id===id);if(existing)state.watchlist=state.watchlist.filter(x=>!x||typeof x!=="object"||x.id!==id);else{const item=[...state.items,...state.watchlist].find(x=>x&&x.id===id);if(item)state.watchlist.push(safeSnapshot(item));}save("pokemarket-watchlist",state.watchlist);render();return;}
+ const watch=event.target.closest("[data-watch]");if(watch){const id=watch.dataset.watch;const item=[...state.items,...state.watchlist].find(x=>x&&(x.id===id||x.url===id));const targetUrl=item?.url||id;const existing=state.watchlist.find(x=>x&&x.url===targetUrl);if(existing)state.watchlist=state.watchlist.filter(x=>x?.url!==targetUrl);else{if(item){const saved=safeSnapshot(item);if(saved)state.watchlist.push(saved);}}save("pokemarket-watchlist",state.watchlist);render();return;}
  const saved=event.target.closest("[data-saved-index]");if(saved){const s=state.savedSearches[Number(saved.dataset.savedIndex)];if(s){$("#searchInput").value=s.query;$("#marketplace").value=s.marketplace;$("#listingType").value=s.type;$("#sortBy").value=s.sort;$("#minPrice").value=s.minPrice;$("#maxPrice").value=s.maxPrice;state.tab="discover";document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.tab==="discover"));search();}return;}
  const tag=event.target.closest("[data-query]");if(tag){$("#searchInput").value=tag.dataset.query;search();}
 });

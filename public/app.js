@@ -37,13 +37,13 @@ async function handleAuthSession(session){
  if(session?.user){try{await loadCloudData(session.user);}catch(error){cloudUser=session.user;cloudReady=false;setAccountMessage("Signed in, but cloud data could not load: "+error.message,true);}}
  else{cloudUser=null;cloudReady=false;state.watchlist=[];state.savedSearches=[];localStorage.removeItem("pokemarket-watchlist");localStorage.removeItem("pokemarket-searches");$("#authForm").classList.remove("hidden");$("#signedInActions").classList.add("hidden");$("#accountTitle").textContent="Your account";$("#accountBtn").textContent="Sign in";setAccountMessage("Sign in to sync your saved searches across devices.");render();}
 }
-const state={tab:"discover",items:[],query:"",watchlist:[],savedSearches:load("pokemarket-searches",[]).map(x=>typeof x==="string"?{id:x,query:x,marketplace:"AU",type:"ALL",sort:"endingSoonest",minPrice:"",maxPrice:""}:x),alerted:load("pokemarket-alerted",[])};
+const state={tab:"discover",items:[],query:"",watchlist:[],savedSearches:load("pokemarket-searches",[]).map(x=>typeof x==="string"?{id:x,query:x,marketplace:"AU",type:"ALL",sort:"endingSoonest",minPrice:"",maxPrice:""}:x),alerted:[]};
 function load(key,fallback){try{return JSON.parse(localStorage.getItem(key))??fallback;}catch{return fallback;}}
 // Remove previously cached eBay seller details, including older watchlist snapshots.
 for(const key of ["pokemarket-last-items","pokemarket-alerted","pokemarket-watchlist"])localStorage.removeItem(key);
 // Rewrite older watchlists immediately, even if the user never edits them.
 try{const old=localStorage.getItem("pokemarket-watchlist");if(old!==null){const parsed=JSON.parse(old);localStorage.setItem("pokemarket-watchlist",JSON.stringify(Array.isArray(parsed)?parsed.map(safeSnapshot).filter(Boolean):[]));}}catch{localStorage.removeItem("pokemarket-watchlist");}
-function save(key,value){if(key==="pokemarket-watchlist")value=value.map(safeSnapshot).filter(Boolean);localStorage.setItem(key,JSON.stringify(value));if(key==="pokemarket-watchlist"||key==="pokemarket-searches")void syncCollection(key,value);}
+function save(key,value){if(key==="pokemarket-watchlist")value=value.map(safeSnapshot).filter(Boolean);localStorage.setItem(key,JSON.stringify(value));if(key==="pokemarket-searches")void syncCollection(key,value);}
 function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function money(v,c){return v==null?"Price unavailable":new Intl.NumberFormat(undefined,{style:"currency",currency:c||"AUD",maximumFractionDigits:2}).format(v);}
 function remaining(end){if(!end)return"Time not supplied";const ms=new Date(end).getTime()-Date.now();if(!Number.isFinite(ms))return"Time not supplied";if(ms<=0)return"Ended";const d=Math.floor(ms/86400000),h=Math.floor(ms%86400000/3600000),m=Math.floor(ms%3600000/60000),s=Math.floor(ms%60000/1000);return d?d+"d "+h+"h left":h?h+"h "+m+"m left":m+"m "+s+"s left";}
@@ -79,7 +79,7 @@ async function search(){
 }
 document.addEventListener("click",event=>{
  const tab=event.target.closest("[data-tab]");if(tab){state.tab=tab.dataset.tab;document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===tab));if(state.tab==="sold")$("#status").textContent="Sold-history access is not enabled until an approved eBay data source is connected.";render();return;}
- const watch=event.target.closest("[data-never-watch]");if(watch){const id=watch.dataset.watch;const item=[...state.items,...state.watchlist].find(x=>x&&(x.id===id||x.url===id));const targetUrl=item?.url||id;const existing=state.watchlist.find(x=>x&&x.url===targetUrl);if(existing)state.watchlist=state.watchlist.filter(x=>x?.url!==targetUrl);else{if(item){const saved=safeSnapshot(item);if(saved)state.watchlist.push(saved);}}save("pokemarket-watchlist",state.watchlist);render();return;}
+ const watch=null;if(watch){const id=watch.dataset.watch;const item=[...state.items,...state.watchlist].find(x=>x&&(x.id===id||x.url===id));const targetUrl=item?.url||id;const existing=state.watchlist.find(x=>x&&x.url===targetUrl);if(existing)state.watchlist=state.watchlist.filter(x=>x?.url!==targetUrl);else{if(item){const saved=safeSnapshot(item);if(saved)state.watchlist.push(saved);}}save("pokemarket-watchlist",state.watchlist);render();return;}
  const saved=event.target.closest("[data-saved-index]");if(saved){const s=state.savedSearches[Number(saved.dataset.savedIndex)];if(s){$("#searchInput").value=s.query;$("#marketplace").value=s.marketplace;$("#listingType").value=s.type;$("#sortBy").value=s.sort;$("#minPrice").value=s.minPrice;$("#maxPrice").value=s.maxPrice;state.tab="discover";document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.tab==="discover"));search();}return;}
  const tag=event.target.closest("[data-query]");if(tag){$("#searchInput").value=tag.dataset.query;search();}
 });
@@ -93,7 +93,7 @@ function checkAlerts(){
  state.alerted=state.alerted.slice(-300);
 }
 if("serviceWorker"in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));
-state.items=load("pokemarket-last-items",[]);render();setInterval(()=>{document.querySelectorAll("[data-end]").forEach(el=>el.textContent=remaining(el.dataset.end));checkAlerts();},15000);
+state.items=[];render();setInterval(()=>{document.querySelectorAll("[data-end]").forEach(el=>el.textContent=remaining(el.dataset.end));checkAlerts();},15000);
 
 $("#accountBtn").addEventListener("click",openAccount);$("#accountClose").addEventListener("click",closeAccount);
 $("#authToggle").addEventListener("click",()=>{authMode=authMode==="signin"?"signup":"signin";$("#authSubmit").textContent=authMode==="signin"?"Sign in":"Create account";$("#authToggle").textContent=authMode==="signin"?"Create account":"Back to sign in";$("#authPassword").setAttribute("autocomplete",authMode==="signin"?"current-password":"new-password");setAccountMessage(authMode==="signup"?"Create an account with your email and a password. Check your email if confirmation is required.":"Sign in to sync your collector data.");});

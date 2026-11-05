@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#090d18">
+<meta name="description" content="TCG Bid Buy Watch Market Stats: current live eBay listing samples and asking-price comparisons for trading cards and sealed products.">
+<title>Market Stats — TCG Bid Buy Watch</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="preload" as="image" type="image/svg+xml" href="/assets/tcg-bid-buy-watch-logo.svg">
+<link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/stats.css">
+</head>
+<body class="market-stats-body">
+<div class="stats-app">
+<header class="stats-topbar">
+  <a href="/" class="stats-back" aria-label="Return to marketplace"><span aria-hidden="true">‹</span> Marketplace</a>
+  <a href="/" class="stats-brand" aria-label="TCG Bid Buy Watch home"><img src="/assets/tcg-bid-buy-watch-logo.svg" alt="TCG Bid Buy Watch" width="800" height="400"></a>
+  <div class="stats-online"><i aria-hidden="true"></i> eBay LIVE</div>
+</header>
+<main class="stats-main">
+<section class="stats-hero">
+  <div class="stats-hero-radar" aria-hidden="true"></div>
+  <div class="stats-hero-copy"><p class="stats-overline">TCG MARKET INTELLIGENCE</p><h1>MARKET <em>STATS</em></h1><p>Explore live listing composition and asking prices across Pokémon, One Piece, Yu-Gi-Oh! and Magic: The Gathering.</p></div>
+</section>
+<div class="stats-data-disclaimer" role="note"><strong>Live listing data, not sold-price history.</strong> Percentages describe only the current eBay sample returned by our searches. Asking prices are not confirmed sales, market-wide valuations or price growth.</div>
+
+<section class="stats-section" aria-labelledby="mixTitle">
+ <div class="stats-section-heading"><div><span class="stats-overline">CATEGORY BREAKDOWN</span><h2 id="mixTitle">Cards vs. sealed products</h2><p>Share of the currently sampled Buy It Now listings from four TCG searches.</p></div><button id="refreshMix" type="button" class="stats-outline-btn">↻ Refresh sample</button></div>
+ <div id="mixStatus" class="stats-fetch-status" role="status">Loading an eBay listing sample…</div>
+ <div class="stats-metrics-grid">
+   <div class="stats-metric stats-metric-cards"><span>Cards <small>(raw + graded)</small></span><strong id="cardShare">—</strong><p id="cardCount">Counting live listings</p></div>
+   <div class="stats-metric stats-metric-sealed"><span>Sealed products</span><strong id="sealedShare">—</strong><p id="sealedCount">Counting live listings</p></div>
+   <div class="stats-metric"><span>Sample size</span><strong id="sampleSize">—</strong><p>Distinct eBay listings</p></div>
+   <div class="stats-metric"><span>Graded cards</span><strong id="gradedShare">—</strong><p id="gradedCount">Share of sampled listings</p></div>
+ </div>
+ <div class="stats-mix-panel">
+   <div class="stats-mix-head"><h3>Listing composition</h3><span id="mixTimestamp">Live sample</span></div>
+   <div class="stats-mix-bar" role="img" id="mixBar" aria-label="Cards and sealed listings in the current sample"><span id="mixCardsBar" class="stats-mix-cards"></span><span id="mixSealedBar" class="stats-mix-sealed"></span></div>
+   <div class="stats-mix-legend"><span><i class="legend-cards"></i> Cards</span><span><i class="legend-sealed"></i> Sealed</span></div>
+   <div id="tcgMixGrid" class="stats-tcg-grid"><p class="stats-placeholder">Checking four trading card games…</p></div>
+ </div>
+</section>
+
+<section class="stats-section" aria-labelledby="priceTitle">
+ <div class="stats-section-heading"><div><span class="stats-overline">LIVE PRICE RADAR</span><h2 id="priceTitle">Find any card or sealed product</h2><p>Search current eBay Buy It Now listings and compare actual asking prices.</p></div></div>
+ <form id="priceForm" class="stats-search-form">
+  <label class="stats-field stats-search-field">Product or card name<input id="priceQuery" type="search" placeholder="e.g. Umbreon VMAX PSA 10" autocomplete="off" maxlength="120" value="Pokemon 151 booster box" required></label>
+  <label class="stats-field">Product type<select id="priceKind"><option value="ALL">All types</option><option value="CARDS">Cards</option><option value="SEALED" selected>Sealed</option></select></label>
+  <label class="stats-field">Marketplace<select id="priceMarketplace"><option value="AU">eBay Australia · AUD</option><option value="US">eBay US · USD</option></select></label>
+  <button class="stats-search-btn" id="priceSearchBtn" type="submit">⌕ Check prices</button>
+ </form>
+ <div class="stats-popular-queries" aria-label="Popular price searches"><span>Try:</span><button type="button" data-price-query="Umbreon VMAX PSA 10" data-price-kind="CARDS">Umbreon PSA 10</button><button type="button" data-price-query="Pokemon 151 booster box" data-price-kind="SEALED">Pokémon 151</button><button type="button" data-price-query="One Piece OP05 booster box" data-price-kind="SEALED">One Piece OP-05</button><button type="button" data-price-query="Blue-Eyes White Dragon PSA 10" data-price-kind="CARDS">Blue-Eyes PSA 10</button><button type="button" data-price-query="MTG Modern Horizons 3 collector booster box" data-price-kind="SEALED">MTG Horizons 3</button></div>
+ <div id="priceStatus" class="stats-fetch-status" role="status">Preparing live prices…</div>
+ <div class="stats-price-metrics">
+   <div class="stats-metric"><span>Lowest listing</span><strong id="priceMin">—</strong></div>
+   <div class="stats-metric"><span>Median asking price</span><strong id="priceMedian">—</strong></div>
+   <div class="stats-metric"><span>Average asking price</span><strong id="priceAverage">—</strong></div>
+   <div class="stats-metric"><span>Highest listing</span><strong id="priceMax">—</strong></div>
+ </div>
+ <div class="stats-results-heading"><h3>Current listings</h3><span id="priceResultCount">No prices loaded</span></div>
+ <div id="priceResults" class="stats-listings"><div class="stats-placeholder">Search a card or sealed product to see matching live listings.</div></div>
+ <p class="stats-footnote">Prices are listings returned for your search, not verified sold values. Check exact set, language, condition, quantity, edition and grade before comparing. Shipping and taxes may be additional. Different currencies are never combined into one average.</p>
+</section>
+</main>
+<footer class="stats-footer"><span>TCG BID BUY WATCH · MARKET STATS</span><span>Independent collector tool · eBay listings open externally</span></footer>
+</div>
+<script type="module" src="/stats.js"></script>
+</body>
+</html>

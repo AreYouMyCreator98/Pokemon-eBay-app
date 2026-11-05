@@ -1,4 +1,4 @@
-const CACHE="tcg-bid-buy-watch-shell-v8";
+const CACHE="tcg-bid-buy-watch-shell-v9";
 const SHELL=["/","/styles.css","/app.js","/stats.html","/stats.css","/stats.js","/manifest.webmanifest","/assets/tcg-bid-buy-watch-logo.svg"];
 self.addEventListener("install",event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL))));
 self.addEventListener("activate",event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key))))));

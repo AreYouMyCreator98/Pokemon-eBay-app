@@ -104,6 +104,118 @@ async function loadSpotlight(){try{const p=new URLSearchParams({q:"pokemon tradi
 $("#spotPrev").addEventListener("click",()=>moveSpotlight(-1));$("#spotNext").addEventListener("click",()=>moveSpotlight(1));
 $("#spotWindow").addEventListener("mouseenter",()=>state.spotPaused=true);$("#spotWindow").addEventListener("mouseleave",()=>state.spotPaused=false);$("#spotWindow").addEventListener("touchstart",event=>{state.spotTouchX=event.touches[0].clientX;state.spotPaused=true;},{passive:true});$("#spotWindow").addEventListener("touchend",event=>{if(state.spotTouchX!=null){const delta=event.changedTouches[0].clientX-state.spotTouchX;if(Math.abs(delta)>45)moveSpotlight(delta<0?1:-1);}state.spotTouchX=null;state.spotPaused=false;},{passive:true});
 setInterval(()=>{if(!state.spotPaused&&!document.hidden)moveSpotlight(1);},6500);loadSpotlight();
+// Four independent eBay discovery feeds, interleaved so one TCG cannot dominate the page.
+const TCG_FEEDS=[
+ {id:"POKEMON",label:"Pokémon",q:"pokemon trading card"},
+ {id:"ONE_PIECE",label:"One Piece",q:"one piece card game"},
+ {id:"YUGIOH",label:"Yu-Gi-Oh!",q:"yugioh trading card"},
+ {id:"MTG",label:"Magic: The Gathering",q:"magic the gathering mtg card"}
+];
+function feedContext(){return {marketplace:$("#marketplace").value,shipFrom:$("#shipFrom").value,shipsTo:$("#shipsTo").value,minPrice:$("#minPrice").value,maxPrice:$("#maxPrice").value};}
+function feedContextKey(type){return type+"|"+JSON.stringify(feedContext());}
+function feedQuery(game,type){
+ const f=feedContext(),p=new URLSearchParams({q:game.q,marketplace:f.marketplace,type,sort:type==="FIXED"?"newlyListed":"endingSoonest",limit:type==="FIXED"?"24":"50"});
+ if(f.shipFrom!=="ANY")p.set("shipFrom",f.shipFrom);
+ if(f.shipsTo!=="ANY")p.set("shipsTo",f.shipsTo);
+ if(f.minPrice)p.set("minPrice",f.minPrice);
+ if(f.maxPrice)p.set("maxPrice",f.maxPrice);
+ return "/api/search?"+p.toString();
+}
+async function fetchTCGBuckets(type){
+ const responses=await Promise.allSettled(TCG_FEEDS.map(async game=>{
+  const response=await fetch(feedQuery(game,type));
+  if(!response.ok)throw Error("eBay returned "+response.status);
+  const payload=await response.json();
+  return (payload.items||[]).filter(item=>item.url&&(
+   type==="FIXED"?((item.buyingOptions||[]).includes("FIXED_PRICE")&&!(item.buyingOptions||[]).includes("AUCTION")):
+   ((item.buyingOptions||[]).includes("AUCTION")&&item.endTime&&Number.isFinite(new Date(item.endTime).getTime()))
+  )).map(item=>({...item,tcg:game.id,tcgLabel:game.label}));
+ }));
+ const failures=responses.filter(r=>r.status==="rejected").length;
+ const buckets=responses.map(r=>r.status==="fulfilled"?r.value:[]);
+ const seen=new Set(),interleaved=[],max=Math.max(0,...buckets.map(b=>b.length));
+ for(let n=0;n<max;n++)for(const bucket of buckets){const item=bucket[n];if(!item)continue;const id=String(item.id||item.url);if(seen.has(id))continue;seen.add(id);interleaved.push(item);}
+ return {items:interleaved,failures,successes:responses.length-failures};
+}
+async function loadDiscovery(force=false){
+ const key=feedContextKey("FIXED");
+ if(state.discoverLoadingKey===key)return;
+ if(!force&&state.discoverKey===key&&Date.now()-state.discoverFetchedAt<4*60*1000){
+  if(state.tab==="discover"&&state.mode==="feed"){state.items=state.discoverItems;render();}
+  return;
+ }
+ const requestId=++state.discoverRequestId;
+ state.discoverLoadingKey=key;
+ if(state.tab==="discover"&&state.mode==="feed"){$("#status").classList.remove("error");$("#status").textContent="Finding fresh Buy It Now listings across Pokémon, One Piece, Yu-Gi-Oh! and Magic…";}
+ try{
+  const result=await fetchTCGBuckets("FIXED");
+  if(requestId!==state.discoverRequestId)return;
+  if(!result.successes)throw Error("All four eBay discovery feeds are temporarily unavailable.");
+  const differentKey=state.discoverKey!==key;
+  state.discoverItems=result.items;state.discoverKey=key;state.discoverFetchedAt=Date.now();
+  if(differentKey)state.discoverPage=0;
+  if(state.tab==="discover"&&state.mode==="feed"){
+   state.items=state.discoverItems;
+   $("#status").textContent=result.failures?"Showing "+result.items.length+" live Buy It Now listings; "+result.failures+" TCG feed"+(result.failures===1?" is":"s are")+" temporarily unavailable.":"Live eBay Buy It Now picks across four TCGs · Rotating every 20 seconds · Updated "+new Date().toLocaleTimeString();
+   render();
+  }
+ }catch(error){
+  if(requestId!==state.discoverRequestId)return;
+  if(state.tab==="discover"&&state.mode==="feed"){
+   $("#status").classList.add("error");$("#status").textContent=error.message||"The eBay discovery feed is unavailable.";
+   state.items=state.discoverItems;render();
+  }
+ }finally{if(state.discoverLoadingKey===key)state.discoverLoadingKey="";}
+}
+async function loadEndingSoon(force=false){
+ const key=feedContextKey("AUCTION");
+ if(state.endingLoadingKey===key)return;
+ if(!force&&state.endingKey===key&&Date.now()-state.endingFetchedAt<70*1000){
+  if(state.tab==="ending"){state.items=state.endingItems;render();}
+  return;
+ }
+ const requestId=++state.endingRequestId;
+ state.endingLoadingKey=key;
+ if(state.tab==="ending"){$("#status").classList.remove("error");$("#status").textContent="Checking live auctions across Pokémon, One Piece, Yu-Gi-Oh! and Magic…";}
+ try{
+  const result=await fetchTCGBuckets("AUCTION");
+  if(requestId!==state.endingRequestId)return;
+  if(!result.successes)throw Error("All four eBay auction feeds are temporarily unavailable.");
+  state.endingItems=result.items;state.endingKey=key;state.endingFetchedAt=Date.now();
+  if(state.tab==="ending"){
+   state.items=state.endingItems;
+   const now=Date.now(),near=result.items.filter(item=>new Date(item.endTime).getTime()>now&&new Date(item.endTime).getTime()<=now+state.endingWindow*60000).length;
+   $("#status").textContent=result.failures?"Found "+near+" auctions closing within "+state.endingWindow+" minutes; "+result.failures+" TCG feed"+(result.failures===1?" is":"s are")+" unavailable.":"Live eBay auctions · "+near+" ending in the next "+state.endingWindow+" minutes · Refreshed "+new Date().toLocaleTimeString();
+   render();
+  }
+ }catch(error){
+  if(requestId!==state.endingRequestId)return;
+  if(state.tab==="ending"){$("#status").classList.add("error");$("#status").textContent=error.message||"Auction feed temporarily unavailable.";state.items=state.endingItems;render();}
+ }finally{if(state.endingLoadingKey===key)state.endingLoadingKey="";}
+}
+function advanceDiscovery(direction){
+ if(state.tab!=="discover"||state.mode!=="feed")return;
+ state.discoverLastInteraction=Date.now();
+ state.discoverPage+=direction;
+ render();
+}
+$("#discoverPrev").addEventListener("click",()=>advanceDiscovery(-1));
+$("#discoverNext").addEventListener("click",()=>advanceDiscovery(1));
+document.querySelectorAll("[data-tcg]").forEach(button=>button.addEventListener("click",()=>{
+ state.tcgFocus=button.dataset.tcg;state.discoverPage=0;state.discoverLastInteraction=Date.now();
+ document.querySelectorAll("[data-tcg]").forEach(x=>{const selected=x===button;x.classList.toggle("active",selected);x.setAttribute("aria-pressed",String(selected));});
+ render();
+}));
+document.querySelectorAll("[data-ending-minutes]").forEach(button=>button.addEventListener("click",()=>{
+ state.endingWindow=Number(button.dataset.endingMinutes);
+ document.querySelectorAll("[data-ending-minutes]").forEach(x=>{const selected=x===button;x.classList.toggle("active",selected);x.setAttribute("aria-pressed",String(selected));});
+ render();
+}));
+$("#endingRefresh").addEventListener("click",()=>loadEndingSoon(true));
+$("#listingGrid").addEventListener("mouseenter",()=>state.discoverHover=true);
+$("#listingGrid").addEventListener("mouseleave",()=>state.discoverHover=false);
+$("#listingGrid").addEventListener("touchstart",()=>{state.discoverLastInteraction=Date.now();},{passive:true});
+
 async function search(){
  state.mode="search";state.tab="discover";document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.tab==="discover"));
  const q=$("#searchInput").value.trim();if(!q){$("#status").textContent="Enter a Pokémon, card name, set or product to search eBay.";return;}
@@ -247,3 +359,14 @@ $("#authToggle").addEventListener("click",()=>{authMode=authMode==="signin"?"sig
 $("#authForm").addEventListener("submit",async event=>{event.preventDefault();const email=$("#authEmail").value.trim(),password=$("#authPassword").value;$("#authSubmit").disabled=true;try{const result=authMode==="signup"?await supabase.auth.signUp({email,password}):await supabase.auth.signInWithPassword({email,password});if(result.error)throw result.error;if(authMode==="signup"&&!result.data.session){setAccountMessage("Account created. Check your email for the confirmation link, then come back and sign in.");}else if(result.data.session){await handleAuthSession(result.data.session);}}catch(error){setAccountMessage(error.message||"Authentication failed.",true);}finally{$("#authSubmit").disabled=false;}});
 $("#signOutBtn").addEventListener("click",async()=>{const result=await supabase.auth.signOut();if(result.error){setAccountMessage(result.error.message,true);return;}await handleAuthSession(null);closeAccount();});
 supabase.auth.onAuthStateChange((_event,session)=>{Promise.resolve().then(()=>handleAuthSession(session));});
+ // Initial discovery requires no search. Only refresh active sections to limit eBay API usage.
+void loadDiscovery();
+setInterval(()=>{
+ if(document.hidden)return;
+ if(state.tab==="discover"&&state.mode==="feed"){
+  if(!state.discoverHover&&Date.now()-state.discoverLastInteraction>20000)advanceDiscovery(1);
+  if(Date.now()-state.discoverFetchedAt>5*60*1000)void loadDiscovery(true);
+ }else if(state.tab==="ending"&&Date.now()-state.endingFetchedAt>2*60*1000)void loadEndingSoon(true);
+},20000);
+setInterval(()=>{if(state.tab==="ending"&&!document.hidden)render();},60000);
+

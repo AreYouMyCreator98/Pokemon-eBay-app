@@ -51,6 +51,9 @@ async function searchEbay(params) {
   const allowedOrigins=new Set(["ANY","AU","US","JP","GB","CA","NZ","DE","FR","KR","CN","IT","ES"]);
   if(!allowedOrigins.has(shipFrom))throw new Error("Unsupported shipping origin.");
   if(shipFrom!=="ANY")filters.push("itemLocationCountry:"+shipFrom);
+  const shipsTo=clean(params.get("shipsTo")||"ANY",3).toUpperCase();
+  if(!allowedOrigins.has(shipsTo))throw new Error("Unsupported delivery destination.");
+  if(shipsTo!=="ANY")filters.push("deliveryCountry:"+shipsTo);
   if(type==="AUCTION")filters.push("buyingOptions:{AUCTION}");
   if(type==="FIXED")filters.push("buyingOptions:{FIXED_PRICE}");
   const min=Number(params.get("minPrice")),max=Number(params.get("maxPrice"));

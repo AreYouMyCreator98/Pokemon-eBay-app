@@ -203,3 +203,9 @@ body.filters-open{overflow:hidden}
 @keyframes tcg-intro-progress{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @media(max-width:520px){.tcg-quick-nav>a{width:clamp(58px,17vw,74px);height:clamp(58px,17vw,74px)}.tcg-intro-core{min-height:290px}.tcg-intro-logo{width:94vw;max-height:43vh}.tcg-intro-line{margin:-6px 0 14px}.tcg-intro-orbit{width:83vw}.tcg-intro-orbit-two{width:66vw}.tcg-info-dialog{padding:16px}.tcg-info-dialog p{font-size:12px}}
 @media(prefers-reduced-motion:reduce){.tcg-intro,.tcg-intro:before,.tcg-intro-particles,.tcg-intro-logo,.tcg-intro-orbit,.tcg-intro-line,.tcg-intro-tagline,.tcg-intro-meter>span{animation:none!important;transition:none!important}.tcg-intro-logo,.tcg-intro-tagline{opacity:1;transform:none}}
+
+/* Collector-only categories: add artwork for binders, accessories and card collectibles. */
+.category-filters .overlay-filter-chip[data-category="ACCESSORIES"] img{width:100%;height:auto;max-height:49px;object-fit:contain;filter:drop-shadow(0 0 4px #9c5eff50)}
+.listing-card.type-accessories .listing-image{background-image:radial-gradient(circle at 45% 60%,#3a2a78,#11172c 75%);background-size:cover}
+@media(max-width:600px){.category-filters{grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:2px}.category-filters .overlay-filter-chip{padding:0!important;min-width:0!important}.category-filters .overlay-filter-chip img{max-height:34px!important}.category-filters .overlay-filter-chip[data-category="ACCESSORIES"] img{max-height:34px!important}}
+@media(max-width:390px){.category-filters .overlay-filter-chip img{max-height:30px!important}.category-filters .overlay-filter-chip[data-category="ACCESSORIES"] img{max-height:30px!important}}

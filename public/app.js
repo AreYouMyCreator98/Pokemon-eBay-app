@@ -133,51 +133,116 @@ function category(item){
  if(/booster box|elite trainer box|\betb\b|booster pack|sealed|blister|collection box|tin\b|display box|case of|bundle/.test(t))return "SEALED";
  return "RAW";
 }
-function spotlightCard(item){const url=/^https:\/\/www\.ebay\.(com\.au|com)\//i.test(item.url||"")?item.url:"";const image=item.image?'<img src="'+esc(item.image)+'" alt="" loading="lazy" referrerpolicy="no-referrer">':'<span class="spotlight-fallback">✦</span>';return '<article class="spotlight-item"><div class="spotlight-photo">'+image+'</div><div class="spotlight-info"><span class="spotlight-tag overlay-spotlight-tag"><span class="simple-badge-text">AUCTION</span><span class="simple-badge-text">'+esc(category(item))+'</span></span><h3>'+esc(item.title)+'</h3><div class="spotlight-price"><small class="spotlight-price-caption">'+(item.bids===0?"STARTING BID":item.bids==null?"AUCTION PRICE":"CURRENT BID")+'</small>'+money(item.price,item.currency)+'</div><div class="spotlight-time overlay-spotlight-time"><span class="spotlight-time-label">TIME LEFT</span><span class="countdown" data-end="'+esc(item.endTime||"")+'">'+esc(remaining(item.endTime))+'</span></div>'+(url?'<a class="spotlight-link custom-ebay-link" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" aria-label="View this item on eBay"><span class="ebay-inline-brand">eBay</span><span>View on eBay</span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui/icons.svg#external"></use></svg></a>':'')+'</div></article>';}
-function moveSpotlight(direction=1){const count=state.featured.length;if(!count)return;state.featureIndex=(state.featureIndex+direction+count)%count;const track=$("#spotTrack");track.style.transform="translateX(-"+(state.featureIndex*100)+"%)";$("#spotProgress").innerHTML=state.featured.map((_,i)=>'<span class="'+(i===state.featureIndex?"active":"")+'"></span>').join("");}
+function spotlightCard(item){
+ const url=/^https:\/\/www\.ebay\.(com\.au|com)\//i.test(item.url||"")?item.url:"";
+ const image=item.image?'<img src="'+esc(item.image)+'" alt="" loading="lazy" referrerpolicy="no-referrer">':'<span class="spotlight-fallback">✦</span>';
+ const total=amountFor(item,"total",item.currency);
+ return '<article class="spotlight-item"><div class="spotlight-photo">'+image+'</div><div class="spotlight-info"><span class="spotlight-tag overlay-spotlight-tag"><span class="simple-badge-text">AUCTION</span><span class="simple-badge-text">'+esc(category(item))+'</span></span><h3>'+esc(item.title)+'</h3><div class="spotlight-price"><small class="spotlight-price-caption">'+(item.bids===0?"STARTING BID":item.bids==null?"AUCTION PRICE":"CURRENT BID")+'</small>'+money(item.price,item.currency)+(total!==null?'<span class="spotlight-price-total">Bid + known postage: '+money(total,item.currency)+'</span>':'<span class="spotlight-price-total">Postage: check eBay</span>')+'</div><div class="spotlight-time overlay-spotlight-time"><span class="spotlight-time-label">TIME LEFT</span><span class="countdown" data-end="'+esc(item.endTime||"")+'">'+esc(remaining(item.endTime))+'</span></div>'+(url?'<a class="spotlight-link custom-ebay-link" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" aria-label="View this item on eBay"><span class="ebay-inline-brand">eBay</span><span>View on eBay</span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui/icons.svg#external"></use></svg></a>':'')+'</div></article>';
+}
+function radarWindowLabel(minutes){
+ return minutes===1440?"24 hours":minutes===60?"1 hour":minutes+" minutes";
+}
+function radarMatches(){
+ const bounds=priceBounds(appliedFilters),currency=appliedFilters.marketplace==="US"?"USD":"AUD";
+ const within=closingWithin(state.radarItems,state.radarWindow)
+   .filter(item=>withinBudget(item,bounds,currency,appliedFilters.priceMode));
+ return filterCollectorListings(within,state.collectorMode);
+}
+function moveSpotlight(direction=1){
+ const count=state.featured.length;
+ if(!count)return;
+ state.featureIndex=(state.featureIndex+direction+count)%count;
+ $("#spotTrack").style.transform="translateX(-"+(state.featureIndex*100)+"%)";
+ $("#spotProgress").innerHTML=state.featured.map((_,i)=>'<span class="'+(i===state.featureIndex?"active":"")+'"></span>').join("");
+}
+function renderSpotlight(){
+ const match=radarMatches(),count=match.length;
+ state.featured=match.slice(0,12);
+ state.featureIndex=0;
+ const windowLabel=radarWindowLabel(state.radarWindow);
+ $("#radarSummary").textContent=state.radarFetchedAt?
+  count+" sampled collector auction"+(count===1?"":"s")+" ending within "+windowLabel+
+  " · "+state.radarItems.length+" auction listings checked · Refreshed "+new Date(state.radarFetchedAt).toLocaleTimeString("en-AU",{hour:"numeric",minute:"2-digit"}):
+  "Checking live collector auctions across multiple TCG searches…";
+ const empty=state.collectorMode==="COLLECTOR"?
+  "No collector-focused auctions found in this "+windowLabel+" sample. Try All listings or a longer window.":
+  "No auctions found within "+windowLabel+" in this sampled eBay search. Try a longer window.";
+ $("#spotTrack").innerHTML=count?state.featured.map(spotlightCard).join(""):'<div class="spotlight-loading">'+empty+'</div>';
+ $("#spotTrack").style.transform="translateX(0)";
+ $("#spotProgress").innerHTML="";
+ $("#spotPrev").disabled=state.featured.length<2;
+ $("#spotNext").disabled=state.featured.length<2;
+ if(state.featured.length)moveSpotlight(0);
+ updateOverview();
+}
 let spotlightSerial=0;
-async function loadSpotlight(){
+async function loadSpotlight(force=false){
+ const key=feedContextKey("AUCTION");
+ if(!force&&key===state.radarKey&&Date.now()-state.radarFetchedAt<90000){renderSpotlight();return;}
+ if(state.spotlightLoadingKey===key)return;
  const serial=++spotlightSerial;
- const selected={...appliedFilters};
- const bounds=priceBounds(selected),currency=selected.marketplace==="US"?"USD":"AUD";
- const filtersOn=bounds.active;
- state.featured=[];
- $("#spotTrack").innerHTML='<div class="spotlight-loading">Checking live auctions'+(filtersOn?" in your chosen price range":"")+'…</div>';
+ state.spotlightLoadingKey=key;
+ $("#radarSummary").textContent="Searching Pokémon, One Piece, Yu-Gi-Oh! and Magic auctions…";
  try{
-  const p=new URLSearchParams({q:"pokemon trading card",marketplace:selected.marketplace,type:"AUCTION",sort:"endingSoonest",limit:"50",smart:"0"});
-  if(selected.shipFrom!=="ANY")p.set("shipFrom",selected.shipFrom);
-  if(selected.shipsTo!=="ANY")p.set("shipsTo",selected.shipsTo);
-  if(selected.minPrice!=="")p.set("minPrice",selected.minPrice);
-  if(selected.maxPrice!=="")p.set("maxPrice",selected.maxPrice);
-  p.set("priceMode",selected.priceMode);
-  const response=await fetch("/api/search?"+p);
-  if(!response.ok)throw Error("Auction feed unavailable");
-  const data=await response.json();
+  const result=await fetchTCGBuckets("AUCTION");
   if(serial!==spotlightSerial)return;
-  state.featured=closingWithin(data.items||[],10).filter(x=>withinBudget(x,bounds,currency,selected.priceMode)).slice(0,12);
-  state.featureIndex=0;
-  $("#spotTrack").innerHTML=state.featured.length?state.featured.map(spotlightCard).join(""):'<div class="spotlight-loading">'+(filtersOn?"No live auction highlights within your price range. Adjust your budget to see more.":"No verified auctions closing in the next 10 minutes right now. Try the Ending soon tab.")+'</div>';
-  $("#spotTrack").style.transform="translateX(0)";
-  moveSpotlight(0);state.spotlightFetchedAt=Date.now();updateOverview();
+  if(!result.successes)throw Error("Auction feeds unavailable");
+  state.radarItems=result.items;
+  state.radarKey=key;
+  state.radarFetchedAt=Date.now();
+  state.endingItems=result.items;
+  state.endingKey=key;
+  state.endingFetchedAt=state.radarFetchedAt;
+  if(state.tab==="ending"){state.items=state.endingItems;render();}
+  renderSpotlight();
+  if(result.failures)$("#radarSummary").textContent+=" · "+result.failures+" search feeds unavailable";
  }catch(error){
   if(serial!==spotlightSerial)return;
-  $("#spotTrack").innerHTML='<div class="spotlight-loading">Live auction highlights are temporarily unavailable. Search below for current listings.</div>';state.spotlightFetchedAt=Date.now();updateOverview();
- }
+  if(state.radarItems.length){renderSpotlight();$("#radarSummary").textContent+=" · Refresh failed; previous sample shown";}
+  else {
+   $("#spotTrack").innerHTML='<div class="spotlight-loading">Auction searches are temporarily unavailable. Try again from the Ending soon tab.</div>';
+   $("#radarSummary").textContent="Unable to load new auctions right now.";
+  }
+ }finally{if(state.spotlightLoadingKey===key)state.spotlightLoadingKey="";}
 }
 function pruneSpotlight(){
- const fresh=closingWithin(state.featured,10);
- if(fresh.length!==state.featured.length){
-   state.featured=fresh;state.featureIndex=0;
-   $("#spotTrack").innerHTML=fresh.length?fresh.map(spotlightCard).join(""):'<div class="spotlight-loading">No active auctions within 10 minutes. New listings are checked periodically.</div>';
-   $("#spotTrack").style.transform="translateX(0)";moveSpotlight(0);updateOverview();
- }
+ const latest=radarMatches().slice(0,12);
+ const old=state.featured.map(x=>x.id||x.url).join("|"),fresh=latest.map(x=>x.id||x.url).join("|");
+ if(old!==fresh)renderSpotlight();
+ else updateOverview();
 }
-// Auction highlights refresh after applying marketplace, shipping or price changes.
-$("#spotPrev").addEventListener("click",()=>moveSpotlight(-1));$("#spotNext").addEventListener("click",()=>moveSpotlight(1));
-$("#spotWindow").addEventListener("mouseenter",()=>state.spotPaused=true);$("#spotWindow").addEventListener("mouseleave",()=>state.spotPaused=false);$("#spotWindow").addEventListener("touchstart",event=>{state.spotTouchX=event.touches[0].clientX;state.spotPaused=true;},{passive:true});$("#spotWindow").addEventListener("touchend",event=>{if(state.spotTouchX!=null){const delta=event.changedTouches[0].clientX-state.spotTouchX;if(Math.abs(delta)>45)moveSpotlight(delta<0?1:-1);}state.spotTouchX=null;state.spotPaused=false;},{passive:true});
+function selectRadarWindow(value){
+ const minutes=Number(value);
+ if(![10,30,60,1440].includes(minutes))return;
+ state.radarWindow=minutes;
+ state.endingWindow=minutes;
+ document.querySelectorAll("[data-radar-minutes],[data-ending-minutes]").forEach(button=>{
+  const selected=Number(button.dataset.radarMinutes||button.dataset.endingMinutes)===minutes;
+  button.classList.toggle("active",selected);
+  button.setAttribute("aria-pressed",String(selected));
+ });
+ renderSpotlight();
+ if(state.tab==="ending")render();
+}
+document.querySelectorAll("[data-radar-minutes]").forEach(button=>button.addEventListener("click",()=>selectRadarWindow(button.dataset.radarMinutes)));
+$("#radarViewAll").addEventListener("click",()=>{
+ document.querySelector('.tab[data-tab="ending"]').click();
+ $("#sectionTitle").scrollIntoView({behavior:"smooth",block:"start"});
+});
+$("#spotPrev").addEventListener("click",()=>moveSpotlight(-1));
+$("#spotNext").addEventListener("click",()=>moveSpotlight(1));
+$("#spotWindow").addEventListener("mouseenter",()=>state.spotPaused=true);
+$("#spotWindow").addEventListener("mouseleave",()=>state.spotPaused=false);
+$("#spotWindow").addEventListener("touchstart",event=>{state.spotTouchX=event.touches[0].clientX;state.spotPaused=true;},{passive:true});
+$("#spotWindow").addEventListener("touchend",event=>{if(state.spotTouchX!=null){const delta=event.changedTouches[0].clientX-state.spotTouchX;if(Math.abs(delta)>45)moveSpotlight(delta<0?1:-1);}state.spotTouchX=null;state.spotPaused=false;},{passive:true});
 setInterval(()=>{if(!state.spotPaused&&!document.hidden)moveSpotlight(1);},6500);
-setInterval(()=>{if(document.hidden)return;pruneSpotlight();if(Date.now()-(state.spotlightFetchedAt||0)>120000)void loadSpotlight();},15000);
-loadSpotlight();
+setInterval(()=>{
+ if(document.hidden)return;
+ pruneSpotlight();
+ if(Date.now()-state.radarFetchedAt>90000)void loadSpotlight(true);
+},15000);
+// Initialise after all feed definitions exist.
+queueMicrotask(()=>void loadSpotlight());
 // Four independent eBay discovery feeds, interleaved so one TCG cannot dominate the page.
 const TCG_FEEDS=[
  {id:"POKEMON",label:"Pokémon",q:"pokemon trading card"},

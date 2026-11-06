@@ -127,11 +127,14 @@ const median=nums=>{
  const a=[...nums].sort((x,y)=>x-y);const m=Math.floor(a.length/2);
  return a.length%2?a[m]:(a[m-1]+a[m])/2;
 };
-export function evaluateAskingOpportunity(target,universe,{currency="AUD",minDiscount=15,minPeers=3,now=Date.now()}={}){
+// A single carefully matched pool supports all tiers; unknown postage,
+// currencies, auctions, own-seller offers and duplicates never count as peers.
+function askingEvidence(target,universe,currency){
  if(!identityOf(target))return null;
  if(!(target.buyingOptions||[]).includes("FIXED_PRICE")||(target.buyingOptions||[]).includes("AUCTION"))return null;
  const total=amountFor(target,"total",currency);
- if(total===null||total<=0)return null;
+ const targetSeller=String(target.seller||"").trim().toLowerCase();
+ if(total===null||total<=0||!targetSeller||targetSeller==="seller details on ebay")return null;
  const peerBySeller=new Map();
  for(const other of universe||[]){
   if(!other||other.id===target.id||other.url===target.url||!sameProduct(target,other))continue;
@@ -139,26 +142,71 @@ export function evaluateAskingOpportunity(target,universe,{currency="AUD",minDis
   const cost=amountFor(other,"total",currency);
   if(cost===null||cost<=0)continue;
   const seller=String(other.seller||"").trim().toLowerCase();
-  if(!seller||seller==="seller details on ebay"||seller===String(target.seller||"").toLowerCase())continue;
-  const prev=peerBySeller.get(seller);
-  if(!prev||cost<prev.total)peerBySeller.set(seller,{id:other.id,title:other.title,url:other.url,total:cost,seller:other.seller});
+  if(!seller||seller==="seller details on ebay"||seller===targetSeller)continue;
+  const previous=peerBySeller.get(seller);
+  if(!previous||cost<previous.total)peerBySeller.set(seller,{id:other.id,title:other.title,url:other.url,total:cost,seller:other.seller});
  }
- const peers=[...peerBySeller.values()].sort((a,b)=>a.total-b.total);
- if(peers.length<minPeers)return null;
- // Conservative lower quartile rather than claiming a median equals market value.
- // The lower quartile uses a discrete observed comparison, never an interpolated guess.
+ return {total,peers:[...peerBySeller.values()].sort((a,b)=>a.total-b.total)};
+}
+const discountTo=(price,reference)=>Math.round((1-price/reference)*1000)/10;
+const peerPreview=peers=>peers.slice(0,8).map(({title,url,total})=>({title,url,total}));
+export function evaluateAskingOpportunity(target,universe,{currency="AUD",minDiscount=15,minPeers=3,now=Date.now()}={}){
+ const evidence=askingEvidence(target,universe,currency);
+ if(!evidence||evidence.peers.length<Math.max(3,minPeers))return null;
+ const {total,peers}=evidence;
+ // Strict tier: a discrete observed lower quartile, never an invented quote.
  const q1=peers[Math.floor((peers.length-1)*.25)].total;
  const med=median(peers.map(p=>p.total));
- const discount=Math.round((1-total/q1)*1000)/10;
+ const discount=discountTo(total,q1);
  if(!Number.isFinite(discount)||discount<minDiscount||discount<=0)return null;
- const peerPreview=peers.slice(0,8).map(({title,url,total})=>({title,url,total}));
  return {
   item:target,currency,listedTotal:total,reference:q1,median:med,
-  discountPercent:discount,peerCount:peers.length,comparables:peerPreview,
-  confidence:peers.length>=6?"Moderate":"Limited",
+  discountPercent:discount,peerCount:peers.length,comparables:peerPreview(peers),
+  confidence:peers.length>=6?"Moderate":"Limited",tier:"STRONG",
   basis:"EBAY_ACTIVE_ASKING",comparedAt:new Date(now).toISOString(),
   detail:"Compared with other eBay Buy It Now asking prices for closely matching titles from distinct sellers. Not completed sales, a verified market value or a guarantee. Inspect item photos, attributes, grading, postage and authenticity before purchase."
  };
+}
+// Two peers = an early price signal, NOT a verified market discount.
+// One peer = watchlist lead only; no benchmark percentage is displayed.
+// Both require a lower delivered asking cost than even the cheapest known peer.
+export function evaluateEarlySignal(target,universe,{currency="AUD",minDiscount=15,now=Date.now()}={}){
+ const evidence=askingEvidence(target,universe,currency);
+ if(!evidence||evidence.peers.length<1||evidence.peers.length>=3)return null;
+ const {total,peers}=evidence;
+ const lowest=peers[0].total;
+ const discount=discountTo(total,lowest);
+ if(!Number.isFinite(discount)||discount<minDiscount||discount<=0)return null;
+ const potential=peers.length===2;
+ return {
+  item:target,currency,listedTotal:total,reference:lowest,median:null,
+  discountPercent:potential?discount:null,peerCount:peers.length,
+  comparables:peerPreview(peers),tier:potential?"POTENTIAL":"WATCHLIST",
+  confidence:potential?"Early signal":"Single comparison",
+  basis:"EBAY_ACTIVE_ASKING",comparedAt:new Date(now).toISOString(),
+  detail:potential
+   ?"Two independently listed asking prices are higher, but there is not enough evidence for a reliable market benchmark. Check all seller details and completed sales independently."
+   :"Only one comparable seller was found. This is a watchlist lead, not a validated discount or market-value estimate."
+ };
+}
+export function findTieredAskingOpportunities(targets,comparables,options={}){
+ const seen=new Set(),deals=[],potential=[],watchlist=[];
+ let eligibleProducts=0;
+ for(const item of targets||[]){
+  if(!item?.id||seen.has(item.id))continue;
+  seen.add(item.id);
+  if(!identityOf(item))continue;
+  eligibleProducts++;
+  const strong=evaluateAskingOpportunity(item,comparables,options);
+  if(strong){deals.push(strong);continue;}
+  const early=evaluateEarlySignal(item,comparables,options);
+  if(early){
+   if(early.tier==="POTENTIAL")potential.push(early);
+   else watchlist.push(early);
+  }
+ }
+ const order=(a,b)=>(b.discountPercent??0)-(a.discountPercent??0)||a.listedTotal-b.listedTotal;
+ return {deals:deals.sort(order),potential:potential.sort(order),watchlist:watchlist.sort((a,b)=>a.listedTotal-b.listedTotal),eligibleProducts};
 }
 export function findAskingOpportunities(targets,comparables,options={}){
  const seen=new Set(),deals=[],inspected=[];

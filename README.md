@@ -3,7 +3,7 @@
 A mobile-first, read-only Pokémon marketplace dashboard for eBay listings. Research listings, save items and open the original eBay item page for any transaction action.
 
 ## Current build
-- Premium dark navy and gold responsive interface with custom app icon
+- Clean light-first responsive design with persistent dark mode and scalable SVG UI assets
 - Server-side eBay Browse API OAuth proxy; credentials stay off the client
 - eBay Australia and eBay US marketplace selection
 - Search, auction / Buy It Now filtering, price bounds and sort order
@@ -49,3 +49,6 @@ Browser auction reminders work while POKÉMARKET is open on a device with notifi
 3. Add more marketplaces and advanced Pokémon-specific filters.
 4. Connect an approved sold-history data source if access is granted.
 5. Add server-backed push alerts and optional cross-device sync.
+
+## UI design system (November 2026)
+The default dashboard uses a clean light palette and can be toggled to dark mode on any page. Shared colour tokens and component styles are in `public/clean-theme.css`, with preference persistence in `public/theme.js`. Vector illustrations and icons are saved inside `public/assets/ui/`; the install icon is `public/icon.svg`. Listing photos are always the real original eBay image, never generated replacements. The existing read-only checkout boundary and live eBay search are preserved.

@@ -25,7 +25,11 @@
     const button = event.target.closest("[data-theme-toggle]");
     if (button) { const next = doc.dataset.theme === "dark" ? "light" : "dark"; save(next); apply(next); }
     const quick = event.target.closest("[data-open-filters]");
-    if (quick) document.getElementById("filterToggle")?.click();
+    if (quick) {
+      document.getElementById("filterToggle")?.click();
+      const target = quick.dataset.filterTarget;
+      if(target)requestAnimationFrame(()=>document.getElementById(target)?.focus({preventScroll:true}));
+    }
   });
   window.addEventListener("storage", event => { if (event.key === KEY) apply(event.newValue); });
   document.addEventListener("DOMContentLoaded", () => apply(read() || "light"), { once: true });

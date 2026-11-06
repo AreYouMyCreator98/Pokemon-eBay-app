@@ -52,3 +52,10 @@ Browser auction reminders work while POKÉMARKET is open on a device with notifi
 
 ## UI design system (November 2026)
 The default dashboard uses a clean light palette and can be toggled to dark mode on any page. Shared colour tokens and component styles are in `public/clean-theme.css`, with preference persistence in `public/theme.js`. Vector illustrations and icons are saved inside `public/assets/ui/`; the install icon is `public/icon.svg`. Listing photos are always the real original eBay image, never generated replacements. The existing read-only checkout boundary and live eBay search are preserved.
+
+## V2 Marketplace Polish
+- Compact listing search, overview counters and a reliably single-row mobile category toolbar
+- Strict ≤10-minute auction radar with expiry removal
+- Card number and seller-stated language filter, price mode for item cost versus item plus known shipping
+- Search suggestions and per-listing links to live asking-price comparisons in Market Stats
+- V2 logic tests in `test/market-v2.test.js`; no invented shipping or sale prices

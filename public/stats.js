@@ -139,5 +139,14 @@ document.querySelectorAll("[data-price-query]").forEach(button=>button.addEventL
  void searchPrices();
 }));
 $("#priceMarketplace").addEventListener("change",()=>{void loadMarketMix();void searchPrices();});
+const comparison=new URLSearchParams(location.search);
+if(comparison.has("q")){
+ const query=comparison.get("q")?.trim().slice(0,120);
+ if(query)$("#priceQuery").value=query;
+ const kind=comparison.get("kind");
+ if(["ALL","CARDS","SEALED","ACCESSORIES"].includes(kind))$("#priceKind").value=kind;
+ const marketplace=comparison.get("marketplace");
+ if(["AU","US"].includes(marketplace))$("#priceMarketplace").value=marketplace;
+}
 void loadMarketMix();
 void searchPrices();

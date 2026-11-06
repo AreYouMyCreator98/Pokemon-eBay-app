@@ -101,3 +101,6 @@
  .radar-options{margin-bottom:7px}
  .spotlight-photo{max-width:47%!important}
 }
+
+/* No pretend save icon: all purchase/watch actions continue on eBay. */
+.listing-card .watch-button{display:none!important}

@@ -66,3 +66,5 @@ The default dashboard uses a clean light palette and can be toggled to dark mode
 - Collector Picks hides obvious mixed-card/bulk lots and seller-described replicas or reprints by default; All Listings, Singles and Lots & Bundles remain available. These are seller-title heuristics, not authentication or verification.
 - Item price and item plus known same-currency postage are shown together on listing cards. Taxes/import duties are not included, and unknown shipping is never silently treated as free.
 - Read-only external eBay navigation, saved-search authentication and existing exact price controls remain unchanged.
+
+- Search responses are briefly cached on the server (20 seconds for auctions, 55 seconds for other searches) to protect rate limits; exact bids and availability should always be verified on eBay. The duplicate star link was removed because it did not actually add an item to a watchlist.

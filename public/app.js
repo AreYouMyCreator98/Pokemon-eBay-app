@@ -107,7 +107,7 @@ function render(){
  const conditionPill='<span>'+esc(conditionText||"CONDITION NOT SUPPLIED")+'</span>';
  const gradeBrand=grade?grade[0].match(/^(PSA|BGS)\b/i):null;
  const gradePill=grade?'<span class="grade-badge">'+esc(grade[0].toUpperCase())+'</span>':'';
- return '<article class="listing-card type-'+cat.toLowerCase()+'"><div class="listing-image">'+image+'<div class="image-tags overlay-tags"><span class="category-badge asset-badge"><span class="simple-badge-text">'+esc(cat)+'</span></span><span class="sale-badge asset-badge '+(auction?"is-auction":"")+'"><span class="simple-badge-text">'+(auction?"AUCTION":"BUY NOW")+'</span></span></div>'+(url?'<a class="watch-button" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" title="Watch on eBay" aria-label="Watch on eBay">☆</a>':'')+gradePill+'</div><div class="listing-body">'+(item.tcgLabel?'<span class="tcg-product-label">'+esc(item.tcgLabel)+'</span>':"")+(collectorKind(item)==="LOT"?'<span class="listing-kind-badge">CARD LOT</span>':"")+(listingWarning(item)?'<span class="listing-warning">'+esc(listingWarning(item))+'</span>':"")+'<h3 class="listing-title" title="'+esc(item.title)+'">'+esc(item.title)+'</h3><p class="listing-condition">'+conditionPill+'</p><div class="price-row"><div><small>'+(auction?(item.bids===0?"STARTING BID":"CURRENT BID"):"LISTED PRICE")+'</small><span class="price">'+money(item.price,item.currency)+'</span></div><span class="currency-tag">'+esc(item.currency||"AUD")+'</span></div>'+time+'<div class="listing-meta"><span>⌖ '+esc(item.location||"Location unavailable")+'</span><span>'+esc(item.marketplace||"")+'</span></div>'+priceCompareBlock(item,cat)+'<div class="card-actions">'+(url?'<a class="ebay-link custom-ebay-link" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" aria-label="View this item on eBay"><span class="ebay-inline-brand">eBay</span><span>View on eBay</span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui/icons.svg#external"></use></svg></a>':'<span class="ebay-link unavailable">eBay listing link unavailable</span>')+'</div></div></article>';
+ return '<article class="listing-card type-'+cat.toLowerCase()+'"><div class="listing-image">'+image+'<div class="image-tags overlay-tags"><span class="category-badge asset-badge"><span class="simple-badge-text">'+esc(cat)+'</span></span><span class="sale-badge asset-badge '+(auction?"is-auction":"")+'"><span class="simple-badge-text">'+(auction?"AUCTION":"BUY NOW")+'</span></span></div>'+gradePill+'</div><div class="listing-body">'+(item.tcgLabel?'<span class="tcg-product-label">'+esc(item.tcgLabel)+'</span>':"")+(collectorKind(item)==="LOT"?'<span class="listing-kind-badge">CARD LOT</span>':"")+(listingWarning(item)?'<span class="listing-warning">'+esc(listingWarning(item))+'</span>':"")+'<h3 class="listing-title" title="'+esc(item.title)+'">'+esc(item.title)+'</h3><p class="listing-condition">'+conditionPill+'</p><div class="price-row"><div><small>'+(auction?(item.bids===0?"STARTING BID":"CURRENT BID"):"LISTED PRICE")+'</small><span class="price">'+money(item.price,item.currency)+'</span></div><span class="currency-tag">'+esc(item.currency||"AUD")+'</span></div>'+time+'<div class="listing-meta"><span>⌖ '+esc(item.location||"Location unavailable")+'</span><span>'+esc(item.marketplace||"")+'</span></div>'+priceCompareBlock(item,cat)+'<div class="card-actions">'+(url?'<a class="ebay-link custom-ebay-link" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" aria-label="View this item on eBay"><span class="ebay-inline-brand">eBay</span><span>View on eBay</span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui/icons.svg#external"></use></svg></a>':'<span class="ebay-link unavailable">eBay listing link unavailable</span>')+'</div></div></article>';
  }).join("");
 }
 function priceCompareBlock(item,cat){
@@ -283,7 +283,7 @@ function feedQuery(game,type){
 }
 async function fetchTCGBuckets(type){
  const feeds=type==="AUCTION"?AUCTION_FEEDS:TCG_FEEDS;
- const responses=await Promise.allSettled(feeds.map(async game=>{
+ const tasks=feeds.map(game=>async()=>{
   const response=await fetch(feedQuery(game,type));
   if(!response.ok)throw Error("eBay returned "+response.status);
   const payload=await response.json();
@@ -291,7 +291,13 @@ async function fetchTCGBuckets(type){
    type==="FIXED"?((item.buyingOptions||[]).includes("FIXED_PRICE")&&!(item.buyingOptions||[]).includes("AUCTION")):
    ((item.buyingOptions||[]).includes("AUCTION")&&item.endTime&&Number.isFinite(new Date(item.endTime).getTime()))
   )).map(item=>({...item,tcg:game.id,tcgLabel:game.label}));
- }));
+ });
+ // Keep requests under control while multiple marketplace feeds are loading.
+ const responses=[];
+ for(let n=0;n<tasks.length;n+=3){
+   const batch=await Promise.allSettled(tasks.slice(n,n+3).map(task=>task()));
+   responses.push(...batch);
+ }
  const failures=responses.filter(r=>r.status==="rejected").length;
  const buckets=responses.map(r=>r.status==="fulfilled"?r.value:[]);
  const seen=new Set(),interleaved=[],max=Math.max(0,...buckets.map(b=>b.length));

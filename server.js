@@ -127,12 +127,29 @@ async function searchEbay(params) {
   return {items,total:items.length,marketplace:key,currency:market.currency,source:"eBay Browse API",fetchedAt:new Date().toISOString(),
    searchMeta:{query:q,corrected:primary.autoCorrections?.q||null,interpretedAs:plan.spellingChanged?plan.canonical:null,expanded:attempts.length>1,alternatives:attempts.length>1?attempts.slice(1):[],matches:items.length}};
 }
+// Cache only publicly available, read-only search responses briefly to reduce
+// duplicate eBay API calls across open dashboard sessions.
+const searchCache=new Map();
+async function cachedSearch(params){
+ const key=params.toString(),now=Date.now();
+ const ttl=params.get("type")==="AUCTION"?20000:55000;
+ const cached=searchCache.get(key);
+ if(cached&&now-cached.time<ttl)return cached.promise;
+ if(cached)searchCache.delete(key);
+ const promise=searchEbay(params);
+ searchCache.set(key,{time:now,promise});
+ if(searchCache.size>200){
+   for(const [k,v] of searchCache){if(now-v.time>60000)searchCache.delete(k);}
+   while(searchCache.size>200)searchCache.delete(searchCache.keys().next().value);
+ }
+ try{return await promise;}catch(error){searchCache.delete(key);throw error;}
+}
 const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,"http://localhost");
   if (await deletionChallenge(req,res,url)) return;
   if(req.method==="GET"&&url.pathname==="/api/health")return send(res,200,{ok:true,ebayConfigured:Boolean(process.env.EBAY_CLIENT_ID&&process.env.EBAY_CLIENT_SECRET)});
   if(req.method==="GET"&&url.pathname==="/api/version")return send(res,200,{ui:"v22-20261106-1",commit:process.env.RENDER_GIT_COMMIT?.slice(0,12)||null});
-  if(req.method==="GET"&&url.pathname==="/api/search"){try{return send(res,200,await searchEbay(url.searchParams));}catch(error){return send(res,502,{error:error.message||"Search unavailable"});}}
+  if(req.method==="GET"&&url.pathname==="/api/search"){try{return send(res,200,await cachedSearch(url.searchParams));}catch(error){return send(res,502,{error:error.message||"Search unavailable"});}}
   if(req.method==="GET"&&url.pathname==="/api/sold")return send(res,200,{available:false,items:[],message:"Verified sold-history access is not connected. eBay Marketplace Insights access is restricted; no sold prices are fabricated or scraped."});
   if(req.method!=="GET")return send(res,405,{error:"Method not allowed"});
   const requested=url.pathname==="/"? "index.html":decodeURIComponent(url.pathname.slice(1));

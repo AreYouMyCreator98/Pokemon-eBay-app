@@ -28,7 +28,7 @@ export function validateBenchmark(row,now=Date.now()){
   productType:row.productType,asOf:new Date(row.asOf).toISOString(),currency:row.currency,value:row.value,
   matchPhrases:row.matchPhrases.map(compact),negativePhrases:(row.negativePhrases||[]).filter(x=>typeof x==="string").slice(0,12).map(compact),
   grader:row.grader||null,grade:row.grade||null,condition:row.condition||null,cardNumber:row.cardNumber||null,setName:row.setName||null,productForm:row.productForm||null,
-  language:row.language||null,units:row.units??1,referenceUrl:row.referenceUrl||null,
+  language:row.language||null,edition:row.edition||null,units:row.units??1,referenceUrl:row.referenceUrl||null,
   // Provenance families help prevent double-counting TCGplayer data re-used by Collectr.
   family:row.family|| (row.source==="PriceCharting"?"pricecharting":"tcgplayer-derived")
  };
@@ -44,6 +44,8 @@ export function exactMatch(item,ref){
  if(ref.productForm&&!hasPhrase(title,ref.productForm))return false;
  if(ref.negativePhrases.some(phrase=>hasPhrase(title,phrase)))return false;
  if(/\b(?:lot|bundle of|sets? of|assorted|proxy|replica|reprint|orica|custom card|box only|empty|unsealed)\b/i.test(title))return false;
+ if(!ref.language&&/\b(?:japanese|korean|chinese|german|spanish|french)\b/i.test(title))return false;
+ if(ref.productType!=="SEALED"&&!ref.edition&&/\b(?:shadowless|1st edition|first edition)\b/i.test(title))return false;
  if(ref.language){
   // An unspecified listing language is not proof of English or Japanese.
   if(!hasPhrase(title,ref.language))return false;

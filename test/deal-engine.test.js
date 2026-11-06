@@ -53,3 +53,9 @@ test("several source names without independently established product details sta
  const d=calculateDeal(listing,[q,other],{marketplace:"AU",now});
  assert.equal(d.confidence,"Review");
 });
+
+test("unmatched Japanese and first edition descriptions do not inherit an English/unlimited quote",()=>{
+ const ref=validateBenchmark(quote,now);
+ assert.equal(exactMatch({...listing,title:listing.title+" Japanese"},ref),false);
+ assert.equal(exactMatch({...listing,title:listing.title+" 1st Edition"},ref),false);
+});

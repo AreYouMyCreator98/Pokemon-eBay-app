@@ -3,6 +3,10 @@ const $=q=>document.querySelector(q);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money=(v,c="AUD")=>Number.isFinite(Number(v))&&v!==null?new Intl.NumberFormat("en-AU",{style:"currency",currency:c,maximumFractionDigits:2}).format(v):"—";
 const ebayURL=raw=>{try{const u=new URL(raw);return u.protocol==="https:"&&["www.ebay.com.au","www.ebay.com"].includes(u.hostname)?u.href:"";}catch{return "";}};
+const sourceURL=(raw,source)=>{try{
+ const u=new URL(raw);const hosts={TCGplayer:["www.tcgplayer.com","tcgplayer.com"],PriceCharting:["www.pricecharting.com","pricecharting.com"],Collectr:["www.getcollectr.com","getcollectr.com"]};
+ return u.protocol==="https:"&&hosts[source]?.includes(u.hostname)?u.href:"";
+}catch{return "";}};
 let requestId=0;
 function imageTag(item){
  if(/^https:\/\//i.test(item.image||""))return '<img src="'+esc(item.image)+'" loading="lazy" referrerpolicy="no-referrer" alt="">';
@@ -15,7 +19,11 @@ function renderCard(item,deal=null){
  const postageKnown=postage!==null&&postage!==undefined&&item.shippingCurrency===currency;
  let extra="";
  if(deal){
-  const refs=deal.sources.map(x=>esc(x.source)+" ("+esc(x.basis.toLowerCase())+", "+esc(x.asOf.slice(0,10))+")").join(" · ");
+  const refs=deal.sources.map(x=>{
+   const label=esc(x.source)+" ("+esc(x.basis.toLowerCase())+", "+esc(x.asOf.slice(0,10))+")";
+   const target=sourceURL(x.referenceUrl,x.source);
+   return target?'<a href="'+esc(target)+'" target="_blank" rel="noopener noreferrer">'+label+'</a>':label;
+  }).join(" · ");
   extra='<div class="deal-ref"><div><span>Conservative licensed reference</span><strong>'+money(deal.reference,currency)+'</strong></div><span class="deal-saving">−'+esc(deal.discountPercent)+'%</span></div>'+
    '<div class="deal-sources"><b>Evidence:</b> '+refs+' · '+esc(deal.confidence)+' confidence. Not a guarantee.</div>';
  }else{

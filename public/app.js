@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
 import { priceBounds, itemInPriceRange, sortByListingPrice } from "./price-range.js";
 import { closingWithin, amountFor, withinBudget, isFilterMatch, sortListingsByCost } from "./market-v2.js";
+import { collectorKind, listingWarning, filterCollectorListings, sortCollectorListings } from "./collector-quality.js";
 const supabase=createClient("https://prxvxomflqzviqiktcgr.supabase.co","sb_publishable_WrQ8yUaSj-z6nsx_-r9FGw_e1CkhXtc");
 const $=s=>document.querySelector(s);
 const FILTER_DEFAULTS=Object.freeze({shipFrom:"ANY",shipsTo:"ANY",marketplace:"AU",listingType:"ALL",sortBy:"endingSoonest",minPrice:"",maxPrice:"",setFilter:"",gradeFilter:"",conditionFilter:"",priceMode:"item",cardNumberFilter:"",languageFilter:""});
@@ -42,7 +43,7 @@ async function handleAuthSession(session){
  if(session?.user){try{await loadCloudData(session.user);}catch(error){cloudUser=session.user;cloudReady=false;setAccountMessage("Signed in, but cloud data could not load: "+error.message,true);}}
  else{cloudUser=null;cloudReady=false;state.watchlist=[];state.savedSearches=[];localStorage.removeItem("pokemarket-watchlist");localStorage.removeItem("pokemarket-searches");$("#authForm").classList.remove("hidden");$("#signedInActions").classList.add("hidden");$("#accountTitle").textContent="Your account";$("#accountBtn").setAttribute("aria-label","Sign in");$("#accountBtn").title="Sign in";setAccountMessage("Sign in to sync your saved searches across devices.");render();}
 }
-const state={featured:[],featureIndex:0,tab:"discover",mode:"feed",view:"grid",tcgFocus:"ALL",discoverPage:0,discoverItems:[],endingItems:[],endingWindow:10,discoverFetchedAt:0,endingFetchedAt:0,discoverKey:"",endingKey:"",discoverRequestId:0,endingRequestId:0,discoverPaused:false,discoverHover:false,discoverLastInteraction:0,category:"ALL",items:[],query:"",watchlist:[],savedSearches:load("pokemarket-searches",[]).map(x=>typeof x==="string"?{id:x,query:x,marketplace:"AU",type:"ALL",sort:"endingSoonest",shipFrom:"ANY",shipsTo:"ANY",minPrice:"",maxPrice:""}:x),alerted:[]};
+const state={featured:[],featureIndex:0,tab:"discover",mode:"feed",view:"grid",tcgFocus:"ALL",discoverPage:0,discoverItems:[],endingItems:[],endingWindow:60,radarWindow:60,radarItems:[],radarFetchedAt:0,radarKey:"",collectorMode:"COLLECTOR",discoverFetchedAt:0,endingFetchedAt:0,discoverKey:"",endingKey:"",discoverRequestId:0,endingRequestId:0,discoverPaused:false,discoverHover:false,discoverLastInteraction:0,category:"ALL",items:[],query:"",watchlist:[],savedSearches:load("pokemarket-searches",[]).map(x=>typeof x==="string"?{id:x,query:x,marketplace:"AU",type:"ALL",sort:"endingSoonest",shipFrom:"ANY",shipsTo:"ANY",minPrice:"",maxPrice:""}:x),alerted:[]};
 function load(key,fallback){try{return JSON.parse(localStorage.getItem(key))??fallback;}catch{return fallback;}}
 // Remove previously cached eBay seller details, including older watchlist snapshots.
 for(const key of ["pokemarket-last-items","pokemarket-alerted","pokemarket-watchlist"])localStorage.removeItem(key);
@@ -82,6 +83,8 @@ function render(){
   return;
  }
  let visible=items.filter(item=>isFilterMatch({...item,productType:category(item)},appliedFilters,state.category));
+ if(isFeed||isEnding)visible=filterCollectorListings(visible,state.collectorMode);
+ if(isFeed&&!["priceAsc","priceDesc"].includes(appliedFilters.sortBy))visible=sortCollectorListings(visible);
  visible=sortListingsByCost(visible,appliedFilters.sortBy,marketCurrency,appliedFilters.priceMode);
  if(isFeed){
   if(state.tcgFocus!=="ALL")visible=visible.filter(item=>item.tcg===state.tcgFocus);
@@ -93,7 +96,7 @@ function render(){
   $("#resultCount").textContent=visible.length+" of "+count+" live Buy It Now listings";
  }else $("#resultCount").textContent=visible.length+(isEnding?" auctions closing within "+state.endingWindow+" minutes":" listings")+(state.mode==="search"&&state.query?' for “'+state.query+'”':"");
  $("#listingGrid").classList.toggle("list-view",state.view==="list");
- if(!visible.length){$("#listingGrid").innerHTML='<div class="empty"><strong>No matching listings</strong>'+(isEnding?"No live auctions match these filters within the next "+state.endingWindow+" minutes.":isFeed?"Try another TCG, card category or filter.":"Adjust your filters or search for a different card.")+"</div>";return;}
+ if(!visible.length){$("#listingGrid").innerHTML='<div class="empty"><strong>No matching listings</strong>'+(isEnding?"No sampled auctions match this time window and these filters.":isFeed&&state.collectorMode==="COLLECTOR"?"No curated matches in this sample. Try All listings or a specific product search.":isFeed?"Try another TCG, card category or filter.":"Adjust your filters or search for a different card.")+"</div>";return;}
  $("#listingGrid").innerHTML=visible.map(item=>{
  const auction=(item.buyingOptions||[]).includes("AUCTION"),cat=category(item),condition=String(item.condition||"").trim();
  const url=/^https:\/\/www\.ebay\.(com\.au|com)\//i.test(item.url||"")?item.url:"";
@@ -104,16 +107,16 @@ function render(){
  const conditionPill='<span>'+esc(conditionText||"CONDITION NOT SUPPLIED")+'</span>';
  const gradeBrand=grade?grade[0].match(/^(PSA|BGS)\b/i):null;
  const gradePill=grade?'<span class="grade-badge">'+esc(grade[0].toUpperCase())+'</span>':'';
- return '<article class="listing-card type-'+cat.toLowerCase()+'"><div class="listing-image">'+image+'<div class="image-tags overlay-tags"><span class="category-badge asset-badge"><span class="simple-badge-text">'+esc(cat)+'</span></span><span class="sale-badge asset-badge '+(auction?"is-auction":"")+'"><span class="simple-badge-text">'+(auction?"AUCTION":"BUY NOW")+'</span></span></div>'+(url?'<a class="watch-button" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" title="Watch on eBay" aria-label="Watch on eBay">☆</a>':'')+gradePill+'</div><div class="listing-body">'+(item.tcgLabel?'<span class="tcg-product-label">'+esc(item.tcgLabel)+'</span>':"")+'<h3 class="listing-title" title="'+esc(item.title)+'">'+esc(item.title)+'</h3><p class="listing-condition">'+conditionPill+'</p><div class="price-row"><div><small>'+(auction?(item.bids===0?"STARTING BID":"CURRENT BID"):"LISTED PRICE")+'</small><span class="price">'+money(item.price,item.currency)+'</span></div><span class="currency-tag">'+esc(item.currency||"AUD")+'</span></div>'+time+'<div class="listing-meta"><span>⌖ '+esc(item.location||"Location unavailable")+'</span><span>'+esc(item.marketplace||"")+'</span></div>'+priceCompareBlock(item,cat)+'<div class="card-actions">'+(url?'<a class="ebay-link custom-ebay-link" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" aria-label="View this item on eBay"><span class="ebay-inline-brand">eBay</span><span>View on eBay</span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui/icons.svg#external"></use></svg></a>':'<span class="ebay-link unavailable">eBay listing link unavailable</span>')+'</div></div></article>';
+ return '<article class="listing-card type-'+cat.toLowerCase()+'"><div class="listing-image">'+image+'<div class="image-tags overlay-tags"><span class="category-badge asset-badge"><span class="simple-badge-text">'+esc(cat)+'</span></span><span class="sale-badge asset-badge '+(auction?"is-auction":"")+'"><span class="simple-badge-text">'+(auction?"AUCTION":"BUY NOW")+'</span></span></div>'+(url?'<a class="watch-button" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" title="Watch on eBay" aria-label="Watch on eBay">☆</a>':'')+gradePill+'</div><div class="listing-body">'+(item.tcgLabel?'<span class="tcg-product-label">'+esc(item.tcgLabel)+'</span>':"")+(collectorKind(item)==="LOT"?'<span class="listing-kind-badge">CARD LOT</span>':"")+(listingWarning(item)?'<span class="listing-warning">'+esc(listingWarning(item))+'</span>':"")+'<h3 class="listing-title" title="'+esc(item.title)+'">'+esc(item.title)+'</h3><p class="listing-condition">'+conditionPill+'</p><div class="price-row"><div><small>'+(auction?(item.bids===0?"STARTING BID":"CURRENT BID"):"LISTED PRICE")+'</small><span class="price">'+money(item.price,item.currency)+'</span></div><span class="currency-tag">'+esc(item.currency||"AUD")+'</span></div>'+time+'<div class="listing-meta"><span>⌖ '+esc(item.location||"Location unavailable")+'</span><span>'+esc(item.marketplace||"")+'</span></div>'+priceCompareBlock(item,cat)+'<div class="card-actions">'+(url?'<a class="ebay-link custom-ebay-link" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" aria-label="View this item on eBay"><span class="ebay-inline-brand">eBay</span><span>View on eBay</span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui/icons.svg#external"></use></svg></a>':'<span class="ebay-link unavailable">eBay listing link unavailable</span>')+'</div></div></article>';
  }).join("");
 }
 function priceCompareBlock(item,cat){
  const known=item.shipping!=null&&item.shippingCurrency===item.currency;
  const postage=known?(item.shipping===0?"Free postage":"Postage "+money(item.shipping,item.currency)):"Postage: check eBay";
- const total=appliedFilters.priceMode==="total"?amountFor(item,"total",item.currency):null;
+ const total=amountFor(item,"total",item.currency);
  const query=state.mode==="search"&&state.query?state.query:String(item.title||"").split(/\s+-\s+|\s+\|\s+/)[0].slice(0,90);
  const comparison="/stats.html?q="+encodeURIComponent(query)+"&amp;kind="+(cat==="SEALED"?"SEALED":cat==="ACCESSORIES"?"ACCESSORIES":"CARDS")+"&amp;marketplace="+esc(appliedFilters.marketplace);
- return '<div class="price-info-note"><span class="price-shipping">'+esc(postage)+'</span>'+(total===null?"":'<strong>Total '+money(total,item.currency)+'</strong>')+'</div><a class="card-compare-link" href="'+comparison+'" title="Compare current asking-price listings">Compare asking prices ↗</a>';
+ return '<div class="price-info-note"><span class="price-shipping">'+esc(postage)+'</span>'+(total===null?'<small class="listing-status-note">Total: check eBay</small>':'<strong>' + ((item.buyingOptions||[]).includes("AUCTION")?"Bid + postage ":"Item + postage ") + money(total,item.currency) + '</strong>')+'</div><a class="card-compare-link" href="'+comparison+'" title="Compare current asking-price listings">Compare asking prices ↗</a>';
 }
 function updateOverview(){
  const ending=closingWithin([...state.featured,...state.endingItems],10);
@@ -375,7 +378,7 @@ state.items=[];render();setInterval(()=>{document.querySelectorAll("[data-end]")
 
 
 // Holographic quick controls: separate Stats page and an accessible Info modal.
-$("#searchNavBtn").addEventListener("click",()=>{$("#searchInput").scrollIntoView({behavior:"smooth",block:"center"});$("#searchInput").focus({preventScroll:true});});
+$("#searchNavBtn")?.addEventListener("click",()=>{$("#searchInput").scrollIntoView({behavior:"smooth",block:"center"});$("#searchInput").focus({preventScroll:true});});
 const infoDialog=$("#infoDialog");
 $("#infoNavBtn").addEventListener("click",()=>{if(!infoDialog.open)infoDialog.showModal();});
 const dismissInfo=()=>{if(infoDialog.open)infoDialog.close();};

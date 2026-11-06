@@ -96,3 +96,18 @@ body.deals-body{background:var(--ui-bg)!important;color:var(--ui-text)!important
  .deal-comparables li{font-size:9px}
  .deals-state{font-size:11px}
 }
+
+/* Signal tiers use typography and discreet borders, never guaranteed-bargain badges. */
+.deal-tier-strong{border-color:var(--ui-strong-line)}
+.deal-tier-potential .deal-ref{border-style:dashed}
+.deal-tier-watchlist .deal-ref{background:var(--ui-subtle)}
+.deal-watch-label{font-size:12px;font-weight:850;white-space:nowrap;color:var(--ui-muted)}
+.deal-section .deals-section-head strong{font-variant-numeric:tabular-nums;white-space:nowrap}
+.deal-card .deal-sources{overflow-wrap:anywhere}
+@media(max-width:600px){
+ .deal-tier-watchlist .deal-ref,.deal-tier-potential .deal-ref{padding:7px}
+ .deal-price-grid{gap:4px}
+ .deal-price-grid>div{min-width:0}
+ .deal-price-grid strong{overflow-wrap:anywhere}
+ .deal-card-title{min-height:0;-webkit-line-clamp:3}
+}

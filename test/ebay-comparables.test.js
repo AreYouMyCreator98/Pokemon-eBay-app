@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {identityOf,sameProduct,evaluateAskingOpportunity,findAskingOpportunities} from "../public/ebay-comparables.js";
+import {identityOf,sameProduct,evaluateAskingOpportunity,evaluateEarlySignal,findAskingOpportunities,findTieredAskingOpportunities} from "../public/ebay-comparables.js";
 const now=Date.parse("2026-11-06T07:00:00Z");
 const base={productType:"GRADED",title:"Pokemon 151 Charizard ex 199/165 PSA 10",condition:"Used",
  price:200,shipping:10,shippingCurrency:"AUD",currency:"AUD",buyingOptions:["FIXED_PRICE"],seller:"target",url:"https://www.ebay.com.au/itm/1",id:"1"};
@@ -53,4 +53,41 @@ test("only one opportunity survives repeated target listings",()=>{
  const peers=[peer(2,310),peer(3,340),peer(4,360)];
  const found=findAskingOpportunities([base,base],peers,{currency:"AUD",now});
  assert.equal(found.deals.length,1);
+});
+
+test("two independent peers can create a potential bargain, never a strong signal",()=>{
+ const universe=[peer(2,310),peer(3,340)];
+ const signals=findTieredAskingOpportunities([base],universe,{currency:"AUD",now,minDiscount:15});
+ assert.equal(signals.deals.length,0);
+ assert.equal(signals.potential.length,1);
+ assert.equal(signals.watchlist.length,0);
+ assert.equal(signals.potential[0].tier,"POTENTIAL");
+ assert.equal(signals.potential[0].peerCount,2);
+ assert.equal(signals.potential[0].reference,320); // lowest asking price, not a market quote
+ assert.equal(signals.potential[0].discountPercent,34.4);
+});
+test("single peer is watchlist-only with no invented discount percentage",()=>{
+ const lead=evaluateEarlySignal(base,[peer(2,310)],{currency:"AUD",minDiscount:15,now});
+ assert.equal(lead.tier,"WATCHLIST");
+ assert.equal(lead.discountPercent,null);
+ assert.equal(lead.peerCount,1);
+ assert.equal(evaluateAskingOpportunity(base,[peer(2,310)],{currency:"AUD",now}),null);
+});
+test("one seller cannot be counted twice and unknown postage cannot make a bargain",()=>{
+ assert.equal(evaluateEarlySignal(base,[peer(2,310),{...peer(3,350),seller:"shop2"}],{currency:"AUD",now}),null);
+ assert.equal(evaluateEarlySignal({...base,shipping:null},[peer(2,310),peer(3,340)],{currency:"AUD",now}),null);
+ assert.equal(evaluateEarlySignal(base,[peer(2,310),{...peer(3,340),currency:"USD"}],{currency:"AUD",now})?.tier,"WATCHLIST");
+ assert.equal(evaluateEarlySignal(base,[peer(2,310),peer(3,340),peer(4,370)],{currency:"AUD",now}),null);
+});
+test("strong tier never reappears as a potential or watchlist result",()=>{
+ const matches=[peer(2,310),peer(3,340),peer(4,370)];
+ const result=findTieredAskingOpportunities([base,base],matches,{currency:"AUD",now,minDiscount:15});
+ assert.equal(result.deals.length,1);
+ assert.equal(result.potential.length,0);
+ assert.equal(result.watchlist.length,0);
+});
+test("an apparently cheap but unrelated slab cannot become an early signal",()=>{
+ const different=peer(2,310,"Pokemon 151 Charizard ex 199/165 PSA 9");
+ assert.equal(evaluateEarlySignal(base,[different],{currency:"AUD",now}),null);
+ assert.equal(evaluateEarlySignal({...base,buyingOptions:["AUCTION"]},[peer(2,310)],{currency:"AUD",now}),null);
 });

@@ -36,7 +36,7 @@ const NOISE=new Set([
  "japanese","english","korean","chinese","sealed","factory","edition","first","1st",
  "pack","booster","box","bundle","display","elite","trainer","etb","lot","sale","free",
  "shipping","mint","gem","ultra","cardboard","official","collectors","collection","single",
- "charizard" // removed only from generic token ID when it is the ONLY name? see below
+ "rare" // only descriptive words are removed; actual card names are retained
 ]);
 const normalize=s=>String(s||"").normalize("NFKD").replace(/[\u0300-\u036f]/g,"")
  .toLowerCase().replace(/[^a-z0-9/]+/g," ").trim().replace(/\s+/g," ");

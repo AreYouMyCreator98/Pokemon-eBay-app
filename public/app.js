@@ -337,7 +337,13 @@ function checkAlerts(){
  for(const item of state.items){if(!item||!item.endTime)continue;const ms=new Date(item.endTime).getTime()-Date.now();if(ms>0&&ms<=10*60*1000&&!state.alerted.includes(item.id)){new Notification("Auction ending soon",{body:(item.title||"Your watched listing")+" · "+remaining(item.endTime)});state.alerted.push(item.id);}}
  state.alerted=state.alerted.slice(-300);
 }
-if("serviceWorker"in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));
+if("serviceWorker"in navigator){
+ window.addEventListener("load",()=>{
+   navigator.serviceWorker.register("/sw.js",{updateViaCache:"none"}).then(async registration=>{
+     try{await registration.update();}catch(_){}
+   }).catch(()=>{});
+ },{once:true});
+}
 state.items=[];render();setInterval(()=>{document.querySelectorAll("[data-end]").forEach(el=>el.textContent=remaining(el.dataset.end));checkAlerts();},15000);
 
 

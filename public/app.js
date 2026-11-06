@@ -43,7 +43,7 @@ async function handleAuthSession(session){
  if(session?.user){try{await loadCloudData(session.user);}catch(error){cloudUser=session.user;cloudReady=false;setAccountMessage("Signed in, but cloud data could not load: "+error.message,true);}}
  else{cloudUser=null;cloudReady=false;state.watchlist=[];state.savedSearches=[];localStorage.removeItem("pokemarket-watchlist");localStorage.removeItem("pokemarket-searches");$("#authForm").classList.remove("hidden");$("#signedInActions").classList.add("hidden");$("#accountTitle").textContent="Your account";$("#accountBtn").setAttribute("aria-label","Sign in");$("#accountBtn").title="Sign in";setAccountMessage("Sign in to sync your saved searches across devices.");render();}
 }
-const state={featured:[],featureIndex:0,tab:"discover",mode:"feed",view:"grid",tcgFocus:"ALL",discoverPage:0,discoverItems:[],endingItems:[],endingWindow:60,radarWindow:60,radarItems:[],radarFetchedAt:0,radarKey:"",collectorMode:"COLLECTOR",discoverFetchedAt:0,endingFetchedAt:0,discoverKey:"",endingKey:"",discoverRequestId:0,endingRequestId:0,discoverPaused:false,discoverHover:false,discoverLastInteraction:0,category:"ALL",items:[],query:"",watchlist:[],savedSearches:load("pokemarket-searches",[]).map(x=>typeof x==="string"?{id:x,query:x,marketplace:"AU",type:"ALL",sort:"endingSoonest",shipFrom:"ANY",shipsTo:"ANY",minPrice:"",maxPrice:""}:x),alerted:[]};
+const state={featured:[],featureIndex:0,tab:"discover",mode:"feed",view:"grid",tcgFocus:"ALL",discoverPage:0,discoverItems:[],endingItems:[],endingWindow:60,radarWindow:60,radarItems:[],radarFetchedAt:0,radarKey:"",radarTcgFocus:"ALL",radarProductFocus:"ALL",collectorMode:"COLLECTOR",discoverFetchedAt:0,endingFetchedAt:0,discoverKey:"",endingKey:"",discoverRequestId:0,endingRequestId:0,discoverPaused:false,discoverHover:false,discoverLastInteraction:0,category:"ALL",items:[],query:"",watchlist:[],savedSearches:load("pokemarket-searches",[]).map(x=>typeof x==="string"?{id:x,query:x,marketplace:"AU",type:"ALL",sort:"endingSoonest",shipFrom:"ANY",shipsTo:"ANY",minPrice:"",maxPrice:""}:x),alerted:[]};
 function load(key,fallback){try{return JSON.parse(localStorage.getItem(key))??fallback;}catch{return fallback;}}
 // Remove previously cached eBay seller details, including older watchlist snapshots.
 for(const key of ["pokemarket-last-items","pokemarket-alerted","pokemarket-watchlist"])localStorage.removeItem(key);
@@ -119,9 +119,10 @@ function priceCompareBlock(item,cat){
  return '<div class="price-info-note"><span class="price-shipping">'+esc(postage)+'</span>'+(total===null?'<small class="listing-status-note">Total: check eBay</small>':'<strong>' + ((item.buyingOptions||[]).includes("AUCTION")?"Bid + postage ":"Item + postage ") + money(total,item.currency) + '</strong>')+'</div><a class="card-compare-link" href="'+comparison+'" title="Compare current asking-price listings">Compare asking prices ↗</a>';
 }
 function updateOverview(){
- const ending=closingWithin([...state.featured,...state.endingItems],10);
- const distinct=new Set(ending.map(x=>x.id||x.url));
- $("#overviewEnding").textContent=state.featured.length||state.endingFetchedAt?String(distinct.size):"—";
+ const count=radarMatches().length;
+ $("#overviewEnding").textContent=state.radarFetchedAt?String(count):"—";
+ const label=$("#overviewEnding").parentElement.querySelector("span");
+ if(label)label.textContent="Auctions ≤"+radarWindowLabel(state.radarWindow)+" · sampled";
  $("#overviewListings").textContent=state.items.length?String(state.items.length):"—";
  $("#overviewSaved").textContent=String(state.savedSearches.length);
 }
@@ -145,7 +146,9 @@ function radarWindowLabel(minutes){
 function radarMatches(){
  const bounds=priceBounds(appliedFilters),currency=appliedFilters.marketplace==="US"?"USD":"AUD";
  const within=closingWithin(state.radarItems,state.radarWindow)
-   .filter(item=>withinBudget(item,bounds,currency,appliedFilters.priceMode));
+   .filter(item=>withinBudget(item,bounds,currency,appliedFilters.priceMode))
+   .filter(item=>(state.radarTcgFocus==="ALL"||item.tcg===state.radarTcgFocus))
+   .filter(item=>(state.radarProductFocus==="ALL"||category(item)===state.radarProductFocus));
  return filterCollectorListings(within,state.collectorMode);
 }
 function moveSpotlight(direction=1){
@@ -225,6 +228,8 @@ function selectRadarWindow(value){
  if(state.tab==="ending")render();
 }
 document.querySelectorAll("[data-radar-minutes]").forEach(button=>button.addEventListener("click",()=>selectRadarWindow(button.dataset.radarMinutes)));
+$("#radarTcgFocus").addEventListener("change",event=>{state.radarTcgFocus=event.target.value;renderSpotlight();});
+$("#radarProductFocus").addEventListener("change",event=>{state.radarProductFocus=event.target.value;renderSpotlight();});
 $("#radarViewAll").addEventListener("click",()=>{
  document.querySelector('.tab[data-tab="ending"]').click();
  $("#sectionTitle").scrollIntoView({behavior:"smooth",block:"start"});
@@ -246,10 +251,24 @@ queueMicrotask(()=>void loadSpotlight());
 // Four independent eBay discovery feeds, interleaved so one TCG cannot dominate the page.
 const TCG_FEEDS=[
  {id:"POKEMON",label:"Pokémon",q:"pokemon trading card"},
+ {id:"POKEMON",label:"Pokémon",q:"pokemon psa 10"},
+ {id:"POKEMON",label:"Pokémon",q:"pokemon booster box"},
  {id:"ONE_PIECE",label:"One Piece",q:"one piece card game"},
  {id:"YUGIOH",label:"Yu-Gi-Oh!",q:"yugioh trading card"},
  {id:"MTG",label:"Magic: The Gathering",q:"magic the gathering mtg card"},
  {id:"ACCESSORIES",label:"TCG Binders & Supplies",q:"trading card binder"}
+];
+// A broader sample than a single generic Pokémon search; still not a complete
+// index of eBay auctions. Dedupe by actual eBay item ID across all queries.
+const AUCTION_FEEDS=[
+ {id:"POKEMON",label:"Pokémon",q:"pokemon trading card"},
+ {id:"POKEMON",label:"Pokémon",q:"pokemon psa 10"},
+ {id:"POKEMON",label:"Pokémon",q:"pokemon booster box"},
+ {id:"POKEMON",label:"Pokémon",q:"prismatic evolutions card"},
+ {id:"ONE_PIECE",label:"One Piece",q:"one piece card game"},
+ {id:"YUGIOH",label:"Yu-Gi-Oh!",q:"yugioh trading card"},
+ {id:"MTG",label:"Magic: The Gathering",q:"magic the gathering mtg card"},
+ {id:"ACCESSORIES",label:"TCG accessories",q:"trading card binder"}
 ];
 function feedContext(){return {marketplace:appliedFilters.marketplace,shipFrom:appliedFilters.shipFrom,shipsTo:appliedFilters.shipsTo,minPrice:appliedFilters.minPrice,maxPrice:appliedFilters.maxPrice,priceMode:appliedFilters.priceMode};}
 function feedContextKey(type){return type+"|"+JSON.stringify(feedContext());}
@@ -263,7 +282,8 @@ function feedQuery(game,type){
  return "/api/search?"+p.toString();
 }
 async function fetchTCGBuckets(type){
- const responses=await Promise.allSettled(TCG_FEEDS.map(async game=>{
+ const feeds=type==="AUCTION"?AUCTION_FEEDS:TCG_FEEDS;
+ const responses=await Promise.allSettled(feeds.map(async game=>{
   const response=await fetch(feedQuery(game,type));
   if(!response.ok)throw Error("eBay returned "+response.status);
   const payload=await response.json();
@@ -310,6 +330,15 @@ async function loadDiscovery(force=false){
 }
 async function loadEndingSoon(force=false){
  const key=feedContextKey("AUCTION");
+ if(!force && state.radarKey===key && Date.now()-state.radarFetchedAt<70000){
+   state.endingItems=state.radarItems;state.endingKey=key;state.endingFetchedAt=state.radarFetchedAt;
+   if(state.tab==="ending"){
+     state.items=state.endingItems;
+     $("#status").textContent="Auction results sampled from "+AUCTION_FEEDS.length+" TCG searches · Updated "+new Date(state.endingFetchedAt).toLocaleTimeString();
+     render();
+   }
+   return;
+ }
  if(state.endingLoadingKey===key)return;
  if(!force&&state.endingKey===key&&Date.now()-state.endingFetchedAt<70*1000){
   if(state.tab==="ending"){state.items=state.endingItems;$("#status").classList.remove("error");$("#status").textContent="Last-minute eBay auctions · Countdown window: "+state.endingWindow+" minutes · Updated "+new Date(state.endingFetchedAt).toLocaleTimeString();render();}
@@ -322,7 +351,9 @@ async function loadEndingSoon(force=false){
   const result=await fetchTCGBuckets("AUCTION");
   if(requestId!==state.endingRequestId)return;
   if(!result.successes)throw Error("All four eBay auction feeds are temporarily unavailable.");
-  state.endingItems=result.items;state.endingKey=key;state.endingFetchedAt=Date.now();updateOverview();
+  state.endingItems=result.items;state.endingKey=key;state.endingFetchedAt=Date.now();
+   state.radarItems=result.items;state.radarKey=key;state.radarFetchedAt=state.endingFetchedAt;
+   renderSpotlight();updateOverview();
   if(state.tab==="ending"){
    state.items=state.endingItems;
    const now=Date.now(),near=result.items.filter(item=>new Date(item.endTime).getTime()>now&&new Date(item.endTime).getTime()<=now+state.endingWindow*60000).length;
@@ -347,12 +378,18 @@ document.querySelectorAll("[data-tcg]").forEach(button=>button.addEventListener(
  document.querySelectorAll("[data-tcg]").forEach(x=>{const selected=x===button;x.classList.toggle("active",selected);x.setAttribute("aria-pressed",String(selected));});
  render();
 }));
-document.querySelectorAll("[data-ending-minutes]").forEach(button=>button.addEventListener("click",()=>{
- state.endingWindow=Number(button.dataset.endingMinutes);
- document.querySelectorAll("[data-ending-minutes]").forEach(x=>{const selected=x===button;x.classList.toggle("active",selected);x.setAttribute("aria-pressed",String(selected));});
- render();
-}));
+document.querySelectorAll("[data-ending-minutes]").forEach(button=>button.addEventListener("click",()=>selectRadarWindow(button.dataset.endingMinutes)));
 $("#endingRefresh").addEventListener("click",()=>loadEndingSoon(true));
+document.querySelectorAll("[data-collector-mode]").forEach(button=>button.addEventListener("click",()=>{
+  state.collectorMode=button.dataset.collectorMode;
+  state.discoverPage=0;
+  document.querySelectorAll("[data-collector-mode]").forEach(x=>{
+    const selected=x===button;
+    x.classList.toggle("active",selected);x.setAttribute("aria-pressed",String(selected));
+  });
+  renderSpotlight();
+  render();
+}));
 $("#listingGrid").addEventListener("mouseenter",()=>state.discoverHover=true);
 $("#listingGrid").addEventListener("mouseleave",()=>state.discoverHover=false);
 $("#listingGrid").addEventListener("touchstart",()=>{state.discoverLastInteraction=Date.now();},{passive:true});

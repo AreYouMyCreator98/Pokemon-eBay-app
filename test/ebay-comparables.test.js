@@ -74,7 +74,7 @@ test("single peer is watchlist-only with no invented discount percentage",()=>{
  assert.equal(evaluateAskingOpportunity(base,[peer(2,310)],{currency:"AUD",now}),null);
 });
 test("one seller cannot be counted twice and unknown postage cannot make a bargain",()=>{
- assert.equal(evaluateEarlySignal(base,[peer(2,310),{...peer(3,350),seller:"shop2"}],{currency:"AUD",now}),null);
+ assert.equal(evaluateEarlySignal(base,[peer(2,310),{...peer(3,350),seller:"shop2"}],{currency:"AUD",now})?.tier,"WATCHLIST");
  assert.equal(evaluateEarlySignal({...base,shipping:null},[peer(2,310),peer(3,340)],{currency:"AUD",now}),null);
  assert.equal(evaluateEarlySignal(base,[peer(2,310),{...peer(3,340),currency:"USD"}],{currency:"AUD",now})?.tier,"WATCHLIST");
  assert.equal(evaluateEarlySignal(base,[peer(2,310),peer(3,340),peer(4,370)],{currency:"AUD",now}),null);

@@ -59,3 +59,13 @@ export function isFilterMatch(item,filters={},category="ALL"){
  if(cf&&cf!=="FACTORY"&&!condition.includes(cf))return false;
  return true;
 }
+
+export function sortListingsByCost(items,sort,currency,mode="item"){
+ if(!["priceAsc","priceDesc"].includes(sort))return items;
+ const direction=sort==="priceDesc"?-1:1;
+ return [...items].sort((a,b)=>{
+  const av=amountFor(a,mode,currency),bv=amountFor(b,mode,currency);
+  if(av===null||bv===null)return av===null?(bv===null?0:1):-1;
+  return direction*(Math.round(av*100)-Math.round(bv*100));
+ });
+}

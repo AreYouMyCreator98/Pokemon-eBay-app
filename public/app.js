@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
 import { priceBounds, itemInPriceRange, sortByListingPrice } from "./price-range.js";
-import { closingWithin, amountFor, withinBudget, isFilterMatch } from "./market-v2.js";
+import { closingWithin, amountFor, withinBudget, isFilterMatch, sortListingsByCost } from "./market-v2.js";
 const supabase=createClient("https://prxvxomflqzviqiktcgr.supabase.co","sb_publishable_WrQ8yUaSj-z6nsx_-r9FGw_e1CkhXtc");
 const $=s=>document.querySelector(s);
 const FILTER_DEFAULTS=Object.freeze({shipFrom:"ANY",shipsTo:"ANY",marketplace:"AU",listingType:"ALL",sortBy:"endingSoonest",minPrice:"",maxPrice:"",setFilter:"",gradeFilter:"",conditionFilter:"",priceMode:"item",cardNumberFilter:"",languageFilter:""});
@@ -82,7 +82,7 @@ function render(){
   return;
  }
  let visible=items.filter(item=>isFilterMatch({...item,productType:category(item)},appliedFilters,state.category));
- visible=sortByListingPrice(visible,appliedFilters.sortBy,marketCurrency);
+ visible=sortListingsByCost(visible,appliedFilters.sortBy,marketCurrency,appliedFilters.priceMode);
  if(isFeed){
   if(state.tcgFocus!=="ALL")visible=visible.filter(item=>item.tcg===state.tcgFocus);
   const count=visible.length,pages=Math.max(1,Math.ceil(count/12));

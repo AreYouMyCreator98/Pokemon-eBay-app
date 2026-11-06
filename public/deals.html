@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f7f9fc">
+<script>(function(){try{document.documentElement.dataset.theme=localStorage.getItem("tcg-theme-preference")==="dark"?"dark":"light"}catch(_){document.documentElement.dataset.theme="light"}})();</script>
+<meta name="description" content="Conservative TCG deal finder. Compares eBay listings against licensed price references when available; never invents prices.">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/styles.css?v=v3-20261106-1">
+<link rel="stylesheet" href="/clean-theme.css?v=v3-20261106-1">
+<link rel="stylesheet" href="/deals.css?v=v3-20261106-1">
+<script defer src="/theme.js?v=v3-20261106-1"></script>
+<title>Good Deals — TCG Bid Buy Watch</title></head>
+<body class="deals-body">
+<div class="app-shell">
+<header class="topbar">
+<a class="brand" href="/" aria-label="Back to TCG dashboard"><span class="tcg-logo-stage"><img class="tcg-brand-logo" src="/assets/ui/tcg-logo-clean.svg" alt="TCG Bid Buy Watch"></span></a>
+<div class="top-actions">
+<a class="deals-header-link" href="/" aria-label="Back to marketplace">Marketplace</a>
+<button type="button" class="theme-toggle" data-theme-toggle aria-label="Switch to dark mode" title="Switch to dark mode"><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui/icons.svg#moon"></use></svg></button>
+</div></header>
+<main class="deals-main">
+<section class="deals-hero" aria-label="Deal finder introduction">
+<div><p class="eyebrow">COLLECTOR MARKET INTELLIGENCE</p><h1>Good Deals <span>Finder</span></h1>
+<p class="deals-lead">Spot potentially underpriced raw cards, graded slabs and sealed products. We compare the eBay total with fresh, licensed references — never guessed values.</p></div>
+<div class="deals-summary"><span>REFERENCE RULE</span><strong>Exact product first.</strong><small>Price + known postage, source date, card variant, grade and condition must match.</small></div>
+</section>
+<section class="deals-filter-panel" aria-label="Deal search filters">
+<label>Marketplace<select id="dealMarketplace"><option value="AU">eBay Australia (AUD)</option><option value="US">eBay US (USD)</option></select></label>
+<label>Product type<select id="dealCategory"><option value="ALL">All products</option><option value="RAW">Raw cards</option><option value="GRADED">Graded cards</option><option value="SEALED">Sealed products</option></select></label>
+<label>Minimum discount<select id="dealDiscount"><option value="10">10% below</option><option value="15" selected>15% below</option><option value="20">20% below</option><option value="25">25% below</option><option value="30">30% below</option></select></label>
+<button id="dealRefresh" type="button"><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui/icons.svg#refresh"></use></svg> Refresh</button>
+</section>
+<div id="dealsState" class="deals-state" role="status" aria-live="polite">Loading available market-reference connections…</div>
+<section id="dealResults" class="deal-section">
+<div class="deals-section-head"><div><p class="eyebrow">SOURCE-VERIFIED COMPARISONS</p><h2>Below-market candidates</h2></div><strong id="dealCount">—</strong></div>
+<p class="deal-help">Only exact-match listings with permitted, recent market references can receive a discount percentage. A below-reference price is a lead to investigate, not a guaranteed bargain.</p>
+<div id="confirmedDeals" class="deals-grid"><div class="deal-placeholder">Checking approved market benchmarks…</div></div>
+</section>
+<section class="deal-section">
+<div class="deals-section-head"><div><p class="eyebrow">LIVE eBay DISCOVERY</p><h2>Collector listings to review</h2></div><strong id="candidateCount">—</strong></div>
+<p class="deal-help">These are live listings, <b>not verified bargains</b>. They stay separate until their exact market price, condition, grade and shipping can be checked.</p>
+<div id="dealCandidates" class="deals-grid"><div class="deal-placeholder">Checking available listing candidates…</div></div>
+</section>
+<section class="deals-methodology">
+<h2>How we decide what counts</h2>
+<div class="deals-steps">
+<div><strong>01 · Match the exact product</strong><p>Same card number, set, printing, language, condition and grader/grade. Sealed products require an equivalent factory-sealed quantity.</p></div>
+<div><strong>02 · Compare the real cost</strong><p>Item price plus known shipping, in the same currency. Unknown postage, taxes and currency conversions are never silently guessed.</p></div>
+<div><strong>03 · Check reference quality</strong><p>Market references must be licensed, less than seven days old and attributed. Related data sources aren't counted as independent evidence.</p></div>
+<div><strong>04 · Review on eBay</strong><p>Always check seller history, photos, authenticity, returns, postage and final availability. Purchasing and bidding stay on eBay.</p></div>
+</div>
+<p class="deal-help">Source integration status: TCGplayer needs existing approved API access; PriceCharting needs paid commercial display permission; Collectr requires approved API access. No provider data is collected by scraping.</p>
+</section>
+</main>
+<footer><span>TCG BID BUY WATCH © 2026</span><span>Independent read-only collector dashboard · No guarantee of market value or authenticity</span></footer>
+</div>
+<script type="module" src="/deals.js?v=v3-20261106-1"></script>
+</body></html>

@@ -3,6 +3,7 @@ import { deletionChallenge } from "./ebay-deletion.js";
 import { makeSearchPlan, scoreSearchItem } from "./smart-search.js";
 import { classifyTCGListing } from "./tcg-only.js";
 import { priceBounds, itemInPriceRange, sortByListingPrice } from "./public/price-range.js";
+import { withinBudget } from "./public/market-v2.js";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -52,6 +53,7 @@ async function searchEbay(params) {
   const sort=["endingSoonest","newlyListed","priceAsc","priceDesc"].includes(params.get("sort"))?params.get("sort"):"endingSoonest";
   const ebaySort=sort==="priceAsc"?"price":sort==="priceDesc"?"-price":sort;
   const bounds=priceBounds({minPrice:params.get("minPrice"),maxPrice:params.get("maxPrice")});
+  const priceMode=params.get("priceMode")==="total"?"total":"item";
   const smart=params.get("smart")!=="0";
   const filters=[];
   const shipFrom=clean(params.get("shipFrom")||"ANY",3).toUpperCase();
@@ -65,7 +67,11 @@ async function searchEbay(params) {
   if(type==="FIXED")filters.push("buyingOptions:{FIXED_PRICE}");
   if(type==="ALL")filters.push("buyingOptions:{AUCTION|FIXED_PRICE}");
   if(bounds.active){
-    filters.push("price:["+(bounds.minCents===null?"":bounds.minCents/100)+".."+(bounds.maxCents===null?"":bounds.maxCents/100)+"]");
+    // In total mode, item prices below the minimum can become eligible with shipping.
+    // Never push the total-price minimum to an eBay item-price filter.
+    const apiMin=priceMode==="total"?"":(bounds.minCents===null?"":bounds.minCents/100);
+    const apiMax=bounds.maxCents===null?"":bounds.maxCents/100;
+    if(priceMode==="item"||apiMax!=="")filters.push("price:["+apiMin+".."+apiMax+"]");
     filters.push("priceCurrency:"+market.currency);
   }
   const plan=makeSearchPlan(q);
@@ -95,8 +101,12 @@ async function searchEbay(params) {
       const value=amount?.value;
       const price=value!==undefined&&value!==null&&value!==""&&Number.isFinite(Number(value))?Number(value):null;
       const listingCurrency=amount?.currency||market.currency;
-      if(!itemInPriceRange({price,currency:listingCurrency},bounds,market.currency))continue;
-      found.push({id:item.itemId,title:item.title,productType,image:item.image?.imageUrl||item.thumbnailImages?.[0]?.imageUrl||"",price,currency:listingCurrency,condition:item.condition||"Condition not supplied",location:item.itemLocation?.city||item.itemLocation?.country||"Location not supplied",shipFrom:item.itemLocation?.country||"",seller:item.seller?.username||"Seller details on eBay",sellerFeedback:item.seller?.feedbackPercentage||null,endTime:item.itemEndDate||null,bids:item.bidCount??null,buyingOptions:item.buyingOptions||[],url:item.itemWebUrl||"",marketplace:key,_relevance:relevance,_variant:attempts.length-1});
+      const delivery=(item.shippingOptions||[]).find(option=>option?.shippingCost?.value!=null);
+      const rawShipping=delivery?.shippingCost?.value;
+      const shipping=rawShipping!==undefined&&rawShipping!==null&&Number.isFinite(Number(rawShipping))&&Number(rawShipping)>=0?Number(rawShipping):null;
+      const shippingCurrency=shipping===null?null:delivery.shippingCost.currency||null;
+      if(!withinBudget({price,currency:listingCurrency,shipping,shippingCurrency},bounds,market.currency,priceMode))continue;
+      found.push({id:item.itemId,title:item.title,productType,image:item.image?.imageUrl||item.thumbnailImages?.[0]?.imageUrl||"",price,currency:listingCurrency,shipping,shippingCurrency,condition:item.condition||"Condition not supplied",location:item.itemLocation?.city||item.itemLocation?.country||"Location not supplied",shipFrom:item.itemLocation?.country||"",seller:item.seller?.username||"Seller details on eBay",sellerFeedback:item.seller?.feedbackPercentage||null,endTime:item.itemEndDate||null,bids:item.bidCount??null,buyingOptions:item.buyingOptions||[],url:item.itemWebUrl||"",marketplace:key,_relevance:relevance,_variant:attempts.length-1});
     }
     return data;
   }

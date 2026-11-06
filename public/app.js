@@ -164,7 +164,7 @@ function renderSpotlight(){
  state.featureIndex=0;
  const windowLabel=radarWindowLabel(state.radarWindow);
  $("#radarSummary").textContent=state.radarFetchedAt?
-  count+" sampled collector auction"+(count===1?"":"s")+" ending within "+windowLabel+
+  count+" sampled auction"+(count===1?"":"s")+" ending within "+windowLabel+
   " · "+state.radarItems.length+" auction listings checked · Refreshed "+new Date(state.radarFetchedAt).toLocaleTimeString("en-AU",{hour:"numeric",minute:"2-digit"}):
   "Checking live collector auctions across multiple TCG searches…";
  const empty=state.collectorMode==="COLLECTOR"?

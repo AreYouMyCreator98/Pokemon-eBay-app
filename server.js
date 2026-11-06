@@ -131,7 +131,7 @@ const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,"http://localhost");
   if (await deletionChallenge(req,res,url)) return;
   if(req.method==="GET"&&url.pathname==="/api/health")return send(res,200,{ok:true,ebayConfigured:Boolean(process.env.EBAY_CLIENT_ID&&process.env.EBAY_CLIENT_SECRET)});
-  if(req.method==="GET"&&url.pathname==="/api/version")return send(res,200,{ui:"clean-20261106-2",commit:process.env.RENDER_GIT_COMMIT?.slice(0,12)||null});
+  if(req.method==="GET"&&url.pathname==="/api/version")return send(res,200,{ui:"v22-20261106-1",commit:process.env.RENDER_GIT_COMMIT?.slice(0,12)||null});
   if(req.method==="GET"&&url.pathname==="/api/search"){try{return send(res,200,await searchEbay(url.searchParams));}catch(error){return send(res,502,{error:error.message||"Search unavailable"});}}
   if(req.method==="GET"&&url.pathname==="/api/sold")return send(res,200,{available:false,items:[],message:"Verified sold-history access is not connected. eBay Marketplace Insights access is restricted; no sold prices are fabricated or scraped."});
   if(req.method!=="GET")return send(res,405,{error:"Method not allowed"});

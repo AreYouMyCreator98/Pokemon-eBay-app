@@ -59,3 +59,10 @@ The default dashboard uses a clean light palette and can be toggled to dark mode
 - Card number and seller-stated language filter, price mode for item cost versus item plus known shipping
 - Search suggestions and per-listing links to live asking-price comparisons in Market Stats
 - V2 logic tests in `test/market-v2.test.js`; no invented shipping or sale prices
+
+## V2.2 — Auction Radar & Collector Quality
+- Home-page header is now compact, with Stats and About accessible from icons beside theme, profile and alerts.
+- Auction Radar can display auctions ending in the next 10, 30, 60 or 1,440 minutes and can be refined by TCG and product category. It searches multiple eBay queries, deduplicates item IDs and excludes ended auctions; the counts are *samples*, not comprehensive market-wide totals.
+- Collector Picks hides obvious mixed-card/bulk lots and seller-described replicas or reprints by default; All Listings, Singles and Lots & Bundles remain available. These are seller-title heuristics, not authentication or verification.
+- Item price and item plus known same-currency postage are shown together on listing cards. Taxes/import duties are not included, and unknown shipping is never silently treated as free.
+- Read-only external eBay navigation, saved-search authentication and existing exact price controls remain unchanged.

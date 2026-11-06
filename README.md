@@ -68,3 +68,39 @@ The default dashboard uses a clean light palette and can be toggled to dark mode
 - Read-only external eBay navigation, saved-search authentication and existing exact price controls remain unchanged.
 
 - Search responses are briefly cached on the server (20 seconds for auctions, 55 seconds for other searches) to protect rate limits; exact bids and availability should always be verified on eBay. The duplicate star link was removed because it did not actually add an item to a watchlist.
+
+## V3 Good Deals — licensed market benchmarking
+
+**No fake market values.** The new read-only `/deals.html` page discovers recent genuine eBay listings and shows a separate *unverified candidate* feed. It only displays an actual below-market comparison if approved current benchmarks are configured. Auction current bids never qualify as final bargains.
+
+To activate authorised reference pricing, configure these **server-side** Render environment variables (never add keys or source data to `public/` or GitHub):
+- `MARKET_REFERENCE_LICENSE_CONFIRMED=true` only after written permission for public app display/commercial use from each source represented.
+- `MARKET_REFERENCE_DATA_JSON`: JSON array of permitted, dated, exact-product reference records for TCGplayer, PriceCharting or Collectr. In future an official provider feed can populate the same validated format.
+
+Example structure (illustrative only; no actual prices are provided):
+
+```json
+[{
+  "approved": true,
+  "source": "PriceCharting",
+  "family": "pricecharting",
+  "productName": "Exact product name",
+  "productType": "GRADED",
+  "currency": "AUD",
+  "value": 0,
+  "basis": "GUIDE",
+  "asOf": "YYYY-MM-DDTHH:MM:SSZ",
+  "setName": "Exact set",
+  "cardNumber": "123/456",
+  "grader": "PSA",
+  "grade": "10",
+  "language": "Japanese",
+  "matchPhrases": ["Exact card name", "123/456", "Exact set"]
+}]
+```
+
+The above placeholder **does not validate**. Prices must be strictly positive, source-approved, within seven days, and supplied in exactly the same currency as the eBay listing. Raw references require condition (NM, LP, MP, HP or DAMAGED); sealed requires exact set and product form. An exact item/grade match plus same-currency known shipping is mandatory; missing information prevents a discount badge.
+
+PriceCharting's regular personal API subscription is **internal-use only** and does not itself authorise displaying data to the public. TCGplayer stopped issuing new API keys and Collectr's access is permission-based. We will not scrape these sources or attribute eBay asking-price medians to them.
+
+Provider quotes can overlap (Collectr may use TCGplayer), so sources are not automatically treated as independent evidence. Even with comparisons, all deals require human verification of photos, edition, condition, authenticity, tax, shipping and final stock. Never call this a 100% guaranteed best deal.

@@ -18,14 +18,16 @@ export function validateBenchmark(row,now=Date.now()){
  if(!row.productName||!Array.isArray(row.matchPhrases)||row.matchPhrases.length<2||row.matchPhrases.length>6)return null;
  if(row.matchPhrases.some(x=>typeof x!=="string"||compact(x).length<3||compact(x).length>80))return null;
  if(!row.matchPhrases.some(x=>compact(x).length>=5))return null;
+ if(["RAW","GRADED"].includes(row.productType)&&(!row.cardNumber||!row.setName||compact(row.cardNumber).length<3||compact(row.setName).length<2))return null;
  if(row.productType==="GRADED"&&(!["PSA","BGS","CGC","SGC","ACE"].includes(row.grader)||!String(row.grade||"").match(/^(?:[1-9]|10)(?:\.5)?$/)))return null;
+ if(row.productType==="SEALED"&&(!row.setName||!row.productForm||compact(row.productForm).length<5))return null;
  if(row.productType==="RAW"&&!["NM","LP","MP","HP","DAMAGED"].includes(row.condition))return null;
  if(row.productType==="SEALED"&&!Number.isInteger(row.units??1))return null;
  return {
   source:row.source,basis:row.basis,productName:String(row.productName).slice(0,100),
   productType:row.productType,asOf:new Date(row.asOf).toISOString(),currency:row.currency,value:row.value,
   matchPhrases:row.matchPhrases.map(compact),negativePhrases:(row.negativePhrases||[]).filter(x=>typeof x==="string").slice(0,12).map(compact),
-  grader:row.grader||null,grade:row.grade||null,condition:row.condition||null,
+  grader:row.grader||null,grade:row.grade||null,condition:row.condition||null,cardNumber:row.cardNumber||null,setName:row.setName||null,productForm:row.productForm||null,
   language:row.language||null,units:row.units??1,referenceUrl:row.referenceUrl||null,
   // Provenance families help prevent double-counting TCGplayer data re-used by Collectr.
   family:row.family|| (row.source==="PriceCharting"?"pricecharting":"tcgplayer-derived")
@@ -37,6 +39,9 @@ export function exactMatch(item,ref){
  if(collectorKind(item)==="LOT"||listingWarning(item))return false;
  const title=item.title||"";
  if(!ref.matchPhrases.every(phrase=>hasPhrase(title,phrase)))return false;
+ if(!hasPhrase(title,ref.setName))return false;
+ if(ref.cardNumber&&!hasPhrase(title,ref.cardNumber))return false;
+ if(ref.productForm&&!hasPhrase(title,ref.productForm))return false;
  if(ref.negativePhrases.some(phrase=>hasPhrase(title,phrase)))return false;
  if(/\b(?:lot|bundle of|sets? of|assorted|proxy|replica|reprint|orica|custom card|box only|empty|unsealed)\b/i.test(title))return false;
  if(ref.language){
@@ -74,7 +79,7 @@ export function calculateDeal(item,rawQuotes,{marketplace="AU",minDiscount=15,no
  const range=Math.max(...references.map(r=>r.value))/benchmark;
  return {
   item,listedTotal:price,reference:benchmark,currency:moneyCode,discountPercent:percent,
-  confidence:independent>=2&&range<=1.15?"Higher":"Review",
+  confidence:independent>=2&&range<=1.15&&references.every(ref=>ref.language)?"Higher":"Review",
   sources:references.map(r=>({source:r.source,basis:r.basis,asOf:r.asOf,referenceUrl:r.referenceUrl,value:r.value,
    productName:r.productName,condition:r.condition,grader:r.grader,grade:r.grade})),
   detail:"Automated comparison only: seller title/condition may be wrong; check photos, authenticity, postage, taxes, returns and completed sales."

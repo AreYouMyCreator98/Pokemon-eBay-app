@@ -4,7 +4,7 @@ import { makeSearchPlan, scoreSearchItem } from "./smart-search.js";
 import { classifyTCGListing } from "./tcg-only.js";
 import { priceBounds, itemInPriceRange, sortByListingPrice } from "./public/price-range.js";
 import { withinBudget, amountFor } from "./public/market-v2.js";
-import { evaluateDeals } from "./public/deal-engine.js";
+import { evaluateDeals, validateBenchmark } from "./public/deal-engine.js";
 import { filterCollectorListings, sortCollectorListings } from "./public/collector-quality.js";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
@@ -156,7 +156,9 @@ function loadApprovedMarketReferences(){
  try{
   const quotes=JSON.parse(raw);
   if(!Array.isArray(quotes)||quotes.length>3000)throw new Error("Invalid reference format");
-  return {ready:true,refs:quotes,note:"Approved market benchmarks supplied by operator."};
+  const validated=quotes.filter(row=>validateBenchmark(row)!==null);
+  if(!validated.length)return {ready:false,refs:[],note:"No recent, precisely matched, approved price references are available."};
+  return {ready:true,refs:validated,note:"Approved, current market benchmarks supplied by operator."};
  }catch{return {ready:false,refs:[],note:"Market benchmark configuration is invalid."};}
 }
 const dealFeedQueries=[
@@ -218,6 +220,6 @@ const server=http.createServer(async(req,res)=>{
   const requested=url.pathname==="/"? "index.html":decodeURIComponent(url.pathname.slice(1));
   const safePath=normalize(requested).replace(/^([.][.][/\\])+/, ""),file=join(PUBLIC,safePath);
   if(!file.startsWith(PUBLIC))return send(res,403,{error:"Forbidden"});
-  try{const body=await readFile(file);res.writeHead(200,{"Content-Type":mime[extname(file)]||"application/octet-stream","X-Content-Type-Options":"nosniff","Cache-Control":"no-store, max-age=0, must-revalidate","X-TCG-UI-Version":"clean-20261106-2"});res.end(body);}catch{send(res,404,"Not found","text/plain; charset=utf-8");}
+  try{const body=await readFile(file);res.writeHead(200,{"Content-Type":mime[extname(file)]||"application/octet-stream","X-Content-Type-Options":"nosniff","Cache-Control":"no-store, max-age=0, must-revalidate","X-TCG-UI-Version":"v3-20261106-1"});res.end(body);}catch{send(res,404,"Not found","text/plain; charset=utf-8");}
 });
 server.listen(PORT,()=>console.log("TCG Bid Buy Watch running on port "+PORT));

@@ -104,3 +104,7 @@
 
 /* No pretend save icon: all purchase/watch actions continue on eBay. */
 .listing-card .watch-button{display:none!important}
+
+.deals-header-link{color:var(--ui-accent)!important}
+.deals-link{white-space:nowrap!important;color:var(--ui-accent)!important}
+@media(max-width:410px){.deals-header-link{display:none!important}}

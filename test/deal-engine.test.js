@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {calculateDeal,evaluateDeals,exactMatch,validateBenchmark} from "../public/deal-engine.js";
 const now=Date.parse("2026-11-06T03:00:00Z");
-const quote={approved:true,source:"PriceCharting",family:"pricecharting",productName:"Charizard ex #199/165",productType:"GRADED",currency:"AUD",value:400,asOf:"2026-11-05T00:00:00Z",basis:"GUIDE",grader:"PSA",grade:"10",matchPhrases:["Charizard","199/165","151"]};
+const quote={approved:true,source:"PriceCharting",family:"pricecharting",productName:"Charizard ex #199/165",productType:"GRADED",currency:"AUD",value:400,asOf:"2026-11-05T00:00:00Z",basis:"GUIDE",grader:"PSA",grade:"10",cardNumber:"199/165",setName:"151",matchPhrases:["Charizard","199/165","151"]};
 const listing={id:"1",title:"Pokemon 151 Charizard ex 199/165 PSA 10 graded",productType:"GRADED",condition:"USED",price:260,shipping:20,currency:"AUD",shippingCurrency:"AUD",buyingOptions:["FIXED_PRICE"],url:"https://www.ebay.com.au/itm/1"};
 test("zero authorised benchmarks means zero manufactured deals",()=>{
  assert.deepEqual(evaluateDeals([listing],[],{marketplace:"AU",now}),[]);
@@ -37,6 +37,19 @@ test("two independent aligned benchmark families increase confidence, not guaran
  const quotes=[quote,{...quote,source:"Collectr",family:"tcgplayer-derived",value:410},{...quote,source:"TCGplayer",family:"tcgplayer-derived",value:405}];
  const deals=evaluateDeals([listing,listing],quotes,{marketplace:"AU",now});
  assert.equal(deals.length,1);
- assert.equal(deals[0].confidence,"Higher");
+ assert.equal(deals[0].confidence,"Review");
  assert.equal(deals[0].reference,400);
+});
+
+test("insufficient identity is not a reliable market match",()=>{
+ assert.equal(validateBenchmark({...quote,cardNumber:null},now),null);
+ assert.equal(validateBenchmark({...quote,setName:null},now),null);
+ const ref=validateBenchmark(quote,now);
+ assert.equal(exactMatch({...listing,title:"Charizard 199/165 PSA 10 no-set"},ref),false);
+});
+test("several source names without independently established product details stay in review",()=>{
+ const q=quote;
+ const other={...quote,source:"TCGplayer",family:"tcgplayer-derived",value:399};
+ const d=calculateDeal(listing,[q,other],{marketplace:"AU",now});
+ assert.equal(d.confidence,"Review");
 });

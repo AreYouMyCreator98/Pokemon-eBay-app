@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check smart-search.js && node --check tcg-only.js && node --check public/price-range.js && node --check public/market-v2.js && node --check public/theme.js && node --check public/app.js && node --check public/stats.js && node --check ebay-deletion.js && node --test test/*.test.js"
+    "check": "node --check server.js && node --check smart-search.js && node --check tcg-only.js && node --check public/price-range.js && node --check public/market-v2.js && node --check public/deal-engine.js && node --check public/deals.js && node --check public/theme.js && node --check public/app.js && node --check public/stats.js && node --check ebay-deletion.js && node --test test/*.test.js"
   },
   "engines": {
     "node": ">=18"

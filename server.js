@@ -5,6 +5,7 @@ import { classifyTCGListing } from "./tcg-only.js";
 import { priceBounds, itemInPriceRange, sortByListingPrice } from "./public/price-range.js";
 import { withinBudget, amountFor } from "./public/market-v2.js";
 import { evaluateDeals, validateBenchmark } from "./public/deal-engine.js";
+import { identityOf, findAskingOpportunities } from "./public/ebay-comparables.js";
 import { filterCollectorListings, sortCollectorListings } from "./public/collector-quality.js";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
@@ -163,56 +164,116 @@ function loadApprovedMarketReferences(){
 }
 const dealFeedQueries=[
  "pokemon psa 10","pokemon 151 trading card","pokemon booster box",
+ "pokemon prismatic evolutions booster bundle","pokemon evolving skies sealed",
  "one piece card game graded","yugioh graded card","magic the gathering foil card"
 ];
 let dealsCache={};
 async function collectDealCandidates(marketplace){
- const key=marketplace,now=Date.now();
- const cached=dealsCache[key];
- if(cached&&now-cached.timestamp<90000)return cached.promise;
+ const key=marketplace,now=Date.now(),cached=dealsCache[key];
+ if(cached&&now-cached.timestamp<120000)return cached.promise;
  const promise=(async()=>{
-  const results=[];
+  const items=[];
   for(let i=0;i<dealFeedQueries.length;i+=3){
-   const group=dealFeedQueries.slice(i,i+3);
-   const settled=await Promise.allSettled(group.map(q=>cachedSearch(new URLSearchParams({q,marketplace,type:"FIXED",sort:"newlyListed",limit:"35",smart:"0"}))));
-   for(const result of settled)if(result.status==="fulfilled")results.push(...(result.value.items||[]));
+   const batch=await Promise.allSettled(dealFeedQueries.slice(i,i+3).map(q=>
+    cachedSearch(new URLSearchParams({q,marketplace,type:"FIXED",sort:"newlyListed",limit:"50",smart:"0"}))));
+   for(const response of batch)if(response.status==="fulfilled")items.push(...(response.value.items||[]));
   }
   const unique=new Map();
-  for(const item of results)if(item?.id&&!unique.has(item.id)&&item.url)unique.set(item.id,item);
-  return sortCollectorListings(filterCollectorListings([...unique.values()],"COLLECTOR")).slice(0,80);
+  for(const item of items)if(item?.id&&!unique.has(item.id)&&item.url)unique.set(item.id,item);
+  return sortCollectorListings(filterCollectorListings([...unique.values()],"COLLECTOR")).slice(0,160);
  })();
  dealsCache[key]={timestamp:now,promise};
  try{return await promise;}catch(error){delete dealsCache[key];throw error;}
 }
+function comparisonQuery(identity){
+ if(identity.kind==="SEALED")return [identity.set,identity.productFormat,"sealed"].join(" ").slice(0,100);
+ return [identity.names.slice(0,2).join(" "),identity.number,identity.set,
+  identity.grade||""].join(" ").replace(/\s+/g," ").trim().slice(0,100);
+}
+function comparisonGroups(candidates){
+ const all=candidates.filter(item=>identityOf(item));
+ const groups=new Map();
+ // Prioritise the lowest combined known cost within a group. Unknown postage
+ // is not used as zero in price comparisons.
+ all.sort((a,b)=>{
+  const ac=amountFor(a,"total",a.currency)??Infinity;
+  const bc=amountFor(b,"total",b.currency)??Infinity;
+  return ac-bc;
+ });
+ for(const item of all){
+  const identity=identityOf(item);
+  const key=JSON.stringify(identity);
+  if(!groups.has(key))groups.set(key,{identity,item});
+ }
+ const selected=[],counts={RAW:0,GRADED:0,SEALED:0};
+ // Include all three product types rather than being swamped by slabs.
+ for(const group of groups.values()){
+  const kind=group.identity.kind;
+  if(counts[kind]>=6||selected.length>=15)continue;
+  selected.push(group);counts[kind]++;
+ }
+ return selected;
+}
+let comparableCache=new Map();
+async function collectComparableUniverse(marketplace,candidates){
+ const now=Date.now();
+ const cache=comparableCache.get(marketplace);
+ if(cache&&now-cache.timestamp<150000)return cache.promise;
+ const promise=(async()=>{
+  const groups=comparisonGroups(candidates);
+  const listings=[...candidates],errors=[];
+  let completed=0;
+  for(let i=0;i<groups.length;i+=3){
+   const current=groups.slice(i,i+3);
+   const responses=await Promise.allSettled(current.map(g=>
+    cachedSearch(new URLSearchParams({q:comparisonQuery(g.identity),type:"FIXED",
+     marketplace,sort:"priceAsc",limit:"50",smart:"0"}))));
+   for(let j=0;j<responses.length;j++){
+    const result=responses[j];completed++;
+    if(result.status==="fulfilled")listings.push(...(result.value.items||[]));
+    else errors.push({query:current[j].identity.set,error:"eBay comparison search unavailable"});
+   }
+  }
+  const unique=new Map();
+  for(const item of listings)if(item?.id&&!unique.has(item.id)&&item.url)unique.set(item.id,item);
+  return {items:[...unique.values()],groups:groups.length,completed,failed:errors.length};
+ })();
+ comparableCache.set(marketplace,{timestamp:now,promise});
+ if(comparableCache.size>4)comparableCache.delete(comparableCache.keys().next().value);
+ try{return await promise;}catch(error){comparableCache.delete(marketplace);throw error;}
+}
 async function getMarketDeals(params){
  const marketplace=params.get("marketplace")==="US"?"US":"AU";
- const type=["ALL","RAW","GRADED","SEALED"].includes(params.get("category"))?params.get("category"):"ALL";
+ const category=["ALL","RAW","GRADED","SEALED"].includes(params.get("category"))?params.get("category"):"ALL";
  const threshold=[10,15,20,25,30].includes(Number(params.get("minDiscount")))?Number(params.get("minDiscount")):15;
- const refs=loadApprovedMarketReferences();
- const candidates=(await collectDealCandidates(marketplace)).filter(x=>type==="ALL"||x.productType===type);
- const matches=refs.ready?evaluateDeals(candidates,refs.refs,{marketplace,minDiscount:threshold}):[];
  const currency=marketplace==="AU"?"AUD":"USD";
- const preview=candidates.slice(0,18).map(item=>({
-  id:item.id,title:item.title,category:item.productType,condition:item.condition,
-  image:item.image,url:item.url,currency:item.currency,
-  itemPrice:item.price,shipping:item.shipping,shippingCurrency:item.shippingCurrency,
-  total:amountFor(item,"total",currency),
-  note:"Unverified eBay candidate. No approved matching market valuation is available for this card or product."
+ const candidates=await collectDealCandidates(marketplace);
+ const universe=await collectComparableUniverse(marketplace,candidates);
+ const target=candidates.filter(item=>(category==="ALL"||item.productType===category)&&identityOf(item));
+ const result=findAskingOpportunities(target,universe.items,{currency,minDiscount:threshold,minPeers:3});
+ const chosen=result.deals.slice(0,24);
+ const exclude=new Set(chosen.map(d=>d.item.id));
+ const preview=candidates.filter(item=>(category==="ALL"||item.productType===category)&&!exclude.has(item.id)).slice(0,18).map(item=>({
+  id:item.id,title:item.title,category:item.productType,condition:item.condition,image:item.image,
+  url:item.url,currency:item.currency,itemPrice:item.price,shipping:item.shipping,
+  shippingCurrency:item.shippingCurrency,total:amountFor(item,"total",currency),
+  note:identityOf(item)?"Not enough validated comparable active asking prices to mark below reference.":"Exact product, condition or language cannot be reliably determined from seller details."
  }));
  return {
-  ready:refs.ready,benchmarksConnected:refs.ready,sourceStatus:refs.note,
-  currency,category:type,checkedListings:candidates.length,discountThreshold:threshold,
-  deals:matches,preview:refs.ready?preview.filter(x=>!matches.some(d=>d.item.id===x.id)).slice(0,12):preview,
-  warning:"A discount to a reference estimate is not a guarantee of authenticity, condition, availability, total cost or the best deal. Prices and stock can change before checkout.",
-  sources:["TCGplayer","PriceCharting","Collectr"],
-  refreshedAt:new Date().toISOString()
+  basis:"EBAY_ACTIVE_ASKING",ready:true,sourceStatus:"Live eBay Buy It Now asking-price comparison",
+  currency,category,checkedListings:candidates.length,comparableListings:universe.items.length,
+  comparisonSearches:universe.completed,failedSearches:universe.failed,
+  matchedIdentityCandidates:result.eligibleProducts,
+  discountThreshold:threshold,deals:chosen,preview,
+  warning:"Discounts compare active ASKING prices from distinct sellers, not sales or verified market value. Item authenticity, exact condition, stock, taxes and seller reliability require independent checking.",
+  sources:["eBay active Buy It Now listings"],refreshedAt:new Date().toISOString()
  };
 }
 const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,"http://localhost");
   if (await deletionChallenge(req,res,url)) return;
   if(req.method==="GET"&&url.pathname==="/api/health")return send(res,200,{ok:true,ebayConfigured:Boolean(process.env.EBAY_CLIENT_ID&&process.env.EBAY_CLIENT_SECRET)});
-  if(req.method==="GET"&&url.pathname==="/api/version")return send(res,200,{ui:"v3-20261106-1",commit:process.env.RENDER_GIT_COMMIT?.slice(0,12)||null});
+  if(req.method==="GET"&&url.pathname==="/api/version")return send(res,200,{ui:"v3-asking-20261106-1",commit:process.env.RENDER_GIT_COMMIT?.slice(0,12)||null});
   if(req.method==="GET"&&url.pathname==="/api/search"){try{return send(res,200,await cachedSearch(url.searchParams));}catch(error){return send(res,502,{error:error.message||"Search unavailable"});}}
   if(req.method==="GET"&&url.pathname==="/api/deals"){try{return send(res,200,await getMarketDeals(url.searchParams));}catch(error){console.warn("Deal discovery unavailable",error.message);return send(res,502,{error:"Live deal discovery is temporarily unavailable. Try again."});}}
   if(req.method==="GET"&&url.pathname==="/api/sold")return send(res,200,{available:false,items:[],message:"Verified sold-history access is not connected. eBay Marketplace Insights access is restricted; no sold prices are fabricated or scraped."});

@@ -5,10 +5,10 @@
 <script>(function(){try{document.documentElement.dataset.theme=localStorage.getItem("tcg-theme-preference")==="dark"?"dark":"light"}catch(_){document.documentElement.dataset.theme="light"}})();</script>
 <meta name="description" content="Find potential TCG bargains by comparing active eBay listings against similar Buy It Now prices from other sellers. No extra pricing API keys.">
 <link rel="manifest" href="/manifest.webmanifest">
-<link rel="stylesheet" href="/styles.css?v=v3-asking-20261106-1">
-<link rel="stylesheet" href="/clean-theme.css?v=v3-asking-20261106-1">
-<link rel="stylesheet" href="/deals.css?v=v3-asking-20261106-1">
-<script defer src="/theme.js?v=v3-asking-20261106-1"></script>
+<link rel="stylesheet" href="/styles.css?v=v3-early-signals-20261106-2">
+<link rel="stylesheet" href="/clean-theme.css?v=v3-early-signals-20261106-2">
+<link rel="stylesheet" href="/deals.css?v=v3-early-signals-20261106-2">
+<script defer src="/theme.js?v=v3-early-signals-20261106-2"></script>
 <title>Good Deals — TCG Bid Buy Watch</title></head>
 <body class="deals-body">
 <div class="app-shell">
@@ -22,7 +22,7 @@
 <section class="deals-hero" aria-label="Deal finder introduction">
 <div><p class="eyebrow">COLLECTOR MARKET INTELLIGENCE</p><h1>Good Deals <span>Finder</span></h1>
 <p class="deals-lead">Find potential bargains in raw cards, graded slabs and sealed products, comparing each eBay price <strong>including known postage</strong> against similar live Buy It Now listings. No extra API keys or subscriptions.</p></div>
-<div class="deals-summary"><span>HOW DEALS ARE FLAGGED</span><strong>3+ comparable sellers</strong><small>We use the lower quartile of matching eBay asking prices — not an invented market value. Check each product yourself.</small></div>
+<div class="deals-summary"><span>HOW DEALS ARE FLAGGED</span><strong>Three evidence levels</strong><small>3+ matching sellers: strong signal. 2 sellers: early bargain signal. 1 seller: watchlist lead only. No sold-price claims.</small></div>
 </section>
 <section class="deals-filter-panel" aria-label="Deal search filters">
 <label>Marketplace<select id="dealMarketplace"><option value="AU">eBay Australia (AUD)</option><option value="US">eBay US (USD)</option></select></label>
@@ -32,13 +32,23 @@
 </section>
 <div id="dealsState" class="deals-state" role="status" aria-live="polite">Searching current eBay listings and comparable prices…</div>
 <section id="dealResults" class="deal-section">
-<div class="deals-section-head"><div><p class="eyebrow">CURRENT eBay ASKING PRICES</p><h2>Potential good deals</h2></div><strong id="dealCount">—</strong></div>
-<p class="deal-help">Only listings with at least three other matching Buy It Now offers from distinct sellers qualify. Percentages are <strong>below the lower quartile of current asking prices</strong>, not a discount from verified sold prices or true market value.</p>
+<div class="deals-section-head"><div><p class="eyebrow">3+ MATCHING SELLERS</p><h2>Strong price signals</h2></div><strong id="dealCount">—</strong></div>
+<p class="deal-help">Listings here pass our strict three-seller comparison. The percentage is below the <strong>lower quartile of active asking prices</strong>, not a verified discount from true market value.</p>
 <div id="confirmedDeals" class="deals-grid"><div class="deal-placeholder">Searching comparable eBay listings…</div></div>
 </section>
 <section class="deal-section">
+<div class="deals-section-head"><div><p class="eyebrow">2 MATCHING SELLERS · LIMITED EVIDENCE</p><h2>Potential bargains</h2></div><strong id="potentialCount">—</strong></div>
+<p class="deal-help">A listing costs less, including known postage, than both independently matching offers. It's a <strong>promising lead, not a verified bargain</strong>. Inspect the two comparisons and any sold data yourself.</p>
+<div id="potentialDeals" class="deals-grid"><div class="deal-placeholder">Checking for early price signals…</div></div>
+</section>
+<section class="deal-section">
+<div class="deals-section-head"><div><p class="eyebrow">1 MATCHING SELLER · NO VALUE ESTIMATE</p><h2>Watchlist leads</h2></div><strong id="watchlistCount">—</strong></div>
+<p class="deal-help">Lower than one other asking price, but with too little evidence to calculate a meaningful discount. <strong>No market-value percentage is shown.</strong></p>
+<div id="watchlistDeals" class="deals-grid"><div class="deal-placeholder">Looking for listings worth watching…</div></div>
+</section>
+<section class="deal-section">
 <div class="deals-section-head"><div><p class="eyebrow">MORE LIVE LISTINGS</p><h2>Collector listings to inspect</h2></div><strong id="candidateCount">—</strong></div>
-<p class="deal-help">These live eBay listings have <strong>not</strong> passed the comparison threshold. They may be worth checking, but we do not invent a discount percentage when evidence is insufficient.</p>
+<p class="deal-help">These live eBay listings did not pass a price-signal threshold or could not be matched precisely. They are still available to inspect, without invented savings.</p>
 <div id="dealCandidates" class="deals-grid"><div class="deal-placeholder">Checking available listing candidates…</div></div>
 </section>
 <section class="deals-methodology">
@@ -46,7 +56,7 @@
 <div class="deals-steps">
 <div><strong>01 · Match the product</strong><p>Match the listed set, collector number, name, language, grade and stated condition. Compare only the same sealed product format and quantity.</p></div>
 <div><strong>02 · Compare total asking prices</strong><p>Use the listing price plus known postage in the same currency. Unknown shipping is excluded, and import taxes are not included.</p></div>
-<div><strong>03 · Require multiple sellers</strong><p>Require at least three matching active Buy It Now offers from different sellers. A conservative lower-quartile price guards against inflated outliers.</p></div>
+<div><strong>03 · Separate evidence levels</strong><p>Three or more distinct sellers are required for strong signals. Two sellers support a tentative opportunity; one comparison is a watchlist lead only, without a discount percentage.</p></div>
 <div><strong>04 · Inspect evidence</strong><p>Open the comparison listings and check condition, photos, authenticity, seller feedback and postage. Final bidding or buying happens on eBay.</p></div>
 </div>
 <p class="deal-help">Data source: the existing authorised eBay Browse API. Comparisons use <strong>active Buy It Now asking prices, not sold transactions</strong>. No TCGplayer, PriceCharting or Collectr prices are claimed or scraped. This is an opportunity finder, not a professional valuation service.</p>
@@ -54,5 +64,5 @@
 </main>
 <footer><span>TCG BID BUY WATCH © 2026</span><span>Independent read-only collector dashboard · No guarantee of market value or authenticity</span></footer>
 </div>
-<script type="module" src="/deals.js?v=v3-asking-20261106-1"></script>
+<script type="module" src="/deals.js?v=v3-early-signals-20261106-2"></script>
 </body></html>

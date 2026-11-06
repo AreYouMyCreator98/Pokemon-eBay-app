@@ -104,3 +104,18 @@ The above placeholder **does not validate**. Prices must be strictly positive, s
 PriceCharting's regular personal API subscription is **internal-use only** and does not itself authorise displaying data to the public. TCGplayer stopped issuing new API keys and Collectr's access is permission-based. We will not scrape these sources or attribute eBay asking-price medians to them.
 
 Provider quotes can overlap (Collectr may use TCGplayer), so sources are not automatically treated as independent evidence. Even with comparisons, all deals require human verification of photos, edition, condition, authenticity, tax, shipping and final stock. Never call this a 100% guaranteed best deal.
+
+## V3.1 — Good Deals without additional price API keys (November 2026)
+
+Good Deals now uses the **existing authorised eBay Browse API**, and **does not require TCGplayer, PriceCharting or Collectr API credentials**.
+
+- Searches new eBay Buy It Now listings, then makes a limited number of additional targeted eBay searches for more offers of the same identifiable product.
+- **Potential price opportunity** cards are shown only when at least three matching active listings from *different sellers* have known item + shipping totals in the same currency. The target seller/listing is excluded.
+- Enforces same set and collector number (where applicable), grading company and grade, language/printing signals, raw condition, and sealed product form. A mismatch or insufficient title/condition details excludes that listing from an automatic deal flag.
+- Uses the **lower quartile of other sellers' current asking prices**, not the mean, in order to avoid inflated percentage-off claims. The UI also displays the peer median, count, and links to actual comparable listings.
+- Highlights price differences only for fixed-price offers, never bids; no claims of authenticity, completed sales, fair market value or a guaranteed best deal.
+- Rate-limits external searches (up to 15 product comparison queries in batches of 3), deduplicates offers, caches comparable results for 150 seconds and general listing discovery for 120 seconds.
+- The original licensed-provider model remains in code for a future separately authorised pricing service but is **not** part of the live Good Deals calculation.
+- See `public/ebay-comparables.js` and `test/ebay-comparables.test.js` for the implemented validation and edge-case coverage.
+
+No external website is scraped and no quotes or sales are invented. The product remains read-only and opens original eBay listings to review or buy.

@@ -281,6 +281,6 @@ const server=http.createServer(async(req,res)=>{
   const requested=url.pathname==="/"? "index.html":decodeURIComponent(url.pathname.slice(1));
   const safePath=normalize(requested).replace(/^([.][.][/\\])+/, ""),file=join(PUBLIC,safePath);
   if(!file.startsWith(PUBLIC))return send(res,403,{error:"Forbidden"});
-  try{const body=await readFile(file);res.writeHead(200,{"Content-Type":mime[extname(file)]||"application/octet-stream","X-Content-Type-Options":"nosniff","Cache-Control":"no-store, max-age=0, must-revalidate","X-TCG-UI-Version":"v3-20261106-1"});res.end(body);}catch{send(res,404,"Not found","text/plain; charset=utf-8");}
+  try{const body=await readFile(file);res.writeHead(200,{"Content-Type":mime[extname(file)]||"application/octet-stream","X-Content-Type-Options":"nosniff","Cache-Control":"no-store, max-age=0, must-revalidate","X-TCG-UI-Version":"v3-asking-20261106-1"});res.end(body);}catch{send(res,404,"Not found","text/plain; charset=utf-8");}
 });
 server.listen(PORT,()=>console.log("TCG Bid Buy Watch running on port "+PORT));

@@ -76,3 +76,23 @@ body.deals-body{background:var(--ui-bg)!important;color:var(--ui-text)!important
  .deals-steps{grid-template-columns:1fr}
 }
 @media(max-width:360px){.deal-card-image{height:122px}.deal-card-title{font-size:10px}.deal-price-grid strong{font-size:14px}}
+
+/* eBay-only asking-price evidence: deliberately understated, inspectable. */
+.deal-comparables{border:1px solid var(--ui-line);background:var(--ui-subtle);border-radius:9px;padding:8px 10px}
+.deal-comparables summary{cursor:pointer;list-style:auto;color:var(--ui-accent);font-size:11px;font-weight:800}
+.deal-comparables[open] summary{margin-bottom:7px}
+.deal-comparables p{font-size:10px;line-height:1.45;color:var(--ui-muted);margin:0 0 8px}
+.deal-comparables ul{margin:0;padding-left:14px;list-style:disc}
+.deal-comparables li{padding:6px 0;border-top:1px solid var(--ui-line);font-size:10px;display:flex;align-items:baseline;justify-content:space-between;gap:9px}
+.deal-comparables li a{flex:1;min-width:0;color:var(--ui-accent);font-weight:650;text-overflow:ellipsis;overflow:hidden;white-space:nowrap}
+.deal-comparables li strong{flex:0 0 auto;color:var(--ui-text);font-weight:800}
+.deal-sources b{color:var(--ui-text)}
+.deal-saving{font-variant-numeric:tabular-nums}
+.deals-state{white-space:normal}
+.deal-section .deal-help strong{color:var(--ui-text)}
+@media(max-width:600px){
+ .deals-summary{border-radius:11px}
+ .deal-comparables{padding:7px}
+ .deal-comparables li{font-size:9px}
+ .deals-state{font-size:11px}
+}

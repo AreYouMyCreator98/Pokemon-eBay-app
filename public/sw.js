@@ -1,9 +1,9 @@
 /* TCG Bid Buy Watch: clean UI release — immediate updates and no stale shell when online. */
-const CACHE="tcg-bid-buy-watch-shell-v18";
+const CACHE="tcg-bid-buy-watch-shell-v19";
 const SHELL=[
   "/","/index.html","/styles.css","/clean-theme.css","/v2-polish.css","/v22-polish.css","/market-v2.js","/collector-quality.js","/app.js","/theme.js",
   "/stats.html","/stats.css","/stats.js","/price-range.js",
-  "/deals.html","/deals.css","/deals.js","/deal-engine.js",
+  "/deals.html","/deals.css","/deals.js","/deal-engine.js","/ebay-comparables.js",
   "/manifest.webmanifest","/icon.svg",
   "/assets/ui/icons.svg","/assets/ui/tcg-logo-clean.svg","/assets/ui/tcg-logo-dark.svg",
   "/assets/ui/hero-clean.svg"

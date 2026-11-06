@@ -31,4 +31,5 @@ jobs:
           curl -fsS http://localhost:3000/stats.html | grep -q '/clean-theme.css'
           curl -fsS http://localhost:3000/deals.html | grep -q 'Good Deals'
           curl -fsS http://localhost:3000/deals.js | grep -q 'loadDeals'
+          curl -fsS http://localhost:3000/ebay-comparables.js | grep -q 'evaluateAskingOpportunity'
           curl -fsS http://localhost:3000/assets/ui/icons.svg | grep -q 'symbol id="search"'

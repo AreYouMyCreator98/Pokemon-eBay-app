@@ -1,8 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
 import { priceBounds, itemInPriceRange, sortByListingPrice } from "./price-range.js";
+import { closingWithin, amountFor, withinBudget, isFilterMatch } from "./market-v2.js";
 const supabase=createClient("https://prxvxomflqzviqiktcgr.supabase.co","sb_publishable_WrQ8yUaSj-z6nsx_-r9FGw_e1CkhXtc");
 const $=s=>document.querySelector(s);
-const FILTER_DEFAULTS=Object.freeze({shipFrom:"ANY",shipsTo:"ANY",marketplace:"AU",listingType:"ALL",sortBy:"endingSoonest",minPrice:"",maxPrice:"",setFilter:"",gradeFilter:"",conditionFilter:""});
+const FILTER_DEFAULTS=Object.freeze({shipFrom:"ANY",shipsTo:"ANY",marketplace:"AU",listingType:"ALL",sortBy:"endingSoonest",minPrice:"",maxPrice:"",setFilter:"",gradeFilter:"",conditionFilter:"",priceMode:"item",cardNumberFilter:"",languageFilter:""});
 const FILTER_FIELDS=Object.keys(FILTER_DEFAULTS);
 let appliedFilters=readFilterValues();
 // Do not persist eBay seller identifiers or seller location in saved listing snapshots.
@@ -62,7 +63,7 @@ function renderSavedSearches(){
  host.innerHTML=state.savedSearches.map((s,i)=>'<button class="tag" data-saved-index="'+i+'">'+esc(s.query)+' · '+esc(s.marketplace)+' · '+esc(s.type)+' ↗</button>').join("");
 }
 function render(){
- renderSavedSearches();
+ renderSavedSearches();updateOverview();
  const sold=state.tab==="sold";$("#soldNotice").classList.toggle("hidden",!sold);$("#listingGrid").classList.toggle("hidden",sold);
  const isFeed=state.tab==="discover"&&state.mode==="feed",isEnding=state.tab==="ending";
  $("#discoveryControls").classList.toggle("hidden",!isFeed);$("#endingControls").classList.toggle("hidden",!isEnding);
@@ -71,16 +72,16 @@ function render(){
  if(sold){$("#resultCount").textContent="Verified data pending";return;}
  const marketCurrency=appliedFilters.marketplace==="US"?"USD":"AUD";
  const bounds=priceBounds(appliedFilters);
- const items=visibleItems().filter(item=>itemInPriceRange(item,bounds,marketCurrency));
+ const items=visibleItems().filter(item=>withinBudget(item,bounds,marketCurrency,appliedFilters.priceMode));
  $("#resultCount").textContent=items.length?items.length+" live listings":"Ready to search";
  if(!items.length){
-  if(bounds.active){$("#listingGrid").innerHTML='<div class="empty"><strong>No listings in your chosen price range</strong>Try expanding your minimum/maximum, or switch to another marketplace. Only listing prices in '+marketCurrency+' are included; postage is extra.</div>';$("#resultCount").textContent="0 listings in budget";if(isFeed)$("#discoverPageLabel").textContent="0 / 0";return;}
+  if(bounds.active){$("#listingGrid").innerHTML='<div class="empty"><strong>No listings in your chosen price range</strong>Try expanding your minimum/maximum, or switch to another marketplace. Only listings with known '+(appliedFilters.priceMode==="total"?"item-plus-shipping totals":"item prices")+' in '+marketCurrency+' are included.</div>';$("#resultCount").textContent="0 listings in budget";if(isFeed)$("#discoverPageLabel").textContent="0 / 0";return;}
   $("#listingGrid").innerHTML='<div class="empty"><strong>'+(isEnding?"No auctions currently closing in the next "+state.endingWindow+" minutes":isFeed?"No Buy It Now listings loaded yet":"No listings loaded yet")+'</strong>'+(isEnding?"Try the 10-minute window or refresh. Only confirmed countdowns are shown.":isFeed?"eBay may be returning no matches right now. Try refreshing or choosing another marketplace.":"Search a card, set or sealed product above.")+'</div>';
   $("#resultCount").textContent="0 listings";
   if(isFeed)$("#discoverPageLabel").textContent="0 / 0";
   return;
  }
- let visible=items.filter(item=>{const title=String(item.title||"").toLowerCase(),cat=category(item).toLowerCase(),set=appliedFilters.setFilter.toLowerCase(),grade=appliedFilters.gradeFilter,condition=appliedFilters.conditionFilter;return (state.category==="ALL"||cat===state.category.toLowerCase())&&(!set||title.includes(set))&&(!grade||(grade==="RAW"?cat==="raw":title.includes(grade.toLowerCase())))&&(!condition||(condition==="FACTORY"?/factory sealed|sealed/.test(title):String(item.condition||"").toUpperCase().includes(condition)));});
+ let visible=items.filter(item=>isFilterMatch({...item,productType:category(item)},appliedFilters,state.category));
  visible=sortByListingPrice(visible,appliedFilters.sortBy,marketCurrency);
  if(isFeed){
   if(state.tcgFocus!=="ALL")visible=visible.filter(item=>item.tcg===state.tcgFocus);
@@ -103,8 +104,23 @@ function render(){
  const conditionPill='<span>'+esc(conditionText||"CONDITION NOT SUPPLIED")+'</span>';
  const gradeBrand=grade?grade[0].match(/^(PSA|BGS)\b/i):null;
  const gradePill=grade?'<span class="grade-badge">'+esc(grade[0].toUpperCase())+'</span>':'';
- return '<article class="listing-card type-'+cat.toLowerCase()+'"><div class="listing-image">'+image+'<div class="image-tags overlay-tags"><span class="category-badge asset-badge"><span class="simple-badge-text">'+esc(cat)+'</span></span><span class="sale-badge asset-badge '+(auction?"is-auction":"")+'"><span class="simple-badge-text">'+(auction?"AUCTION":"BUY NOW")+'</span></span></div>'+(url?'<a class="watch-button" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" title="Watch on eBay" aria-label="Watch on eBay">☆</a>':'')+gradePill+'</div><div class="listing-body">'+(item.tcgLabel?'<span class="tcg-product-label">'+esc(item.tcgLabel)+'</span>':"")+'<h3 class="listing-title" title="'+esc(item.title)+'">'+esc(item.title)+'</h3><p class="listing-condition">'+conditionPill+'</p><div class="price-row"><div><small>'+(auction?(item.bids===0?"STARTING BID":"CURRENT BID"):"LISTED PRICE")+'</small><span class="price">'+money(item.price,item.currency)+'</span></div><span class="currency-tag">'+esc(item.currency||"AUD")+'</span></div>'+time+'<div class="listing-meta"><span>⌖ '+esc(item.location||"Location unavailable")+'</span><span>'+esc(item.marketplace||"")+'</span></div><div class="card-actions">'+(url?'<a class="ebay-link custom-ebay-link" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" aria-label="View this item on eBay"><span class="ebay-inline-brand">eBay</span><span>View on eBay</span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui/icons.svg#external"></use></svg></a>':'<span class="ebay-link unavailable">eBay listing link unavailable</span>')+'</div></div></article>';
+ return '<article class="listing-card type-'+cat.toLowerCase()+'"><div class="listing-image">'+image+'<div class="image-tags overlay-tags"><span class="category-badge asset-badge"><span class="simple-badge-text">'+esc(cat)+'</span></span><span class="sale-badge asset-badge '+(auction?"is-auction":"")+'"><span class="simple-badge-text">'+(auction?"AUCTION":"BUY NOW")+'</span></span></div>'+(url?'<a class="watch-button" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" title="Watch on eBay" aria-label="Watch on eBay">☆</a>':'')+gradePill+'</div><div class="listing-body">'+(item.tcgLabel?'<span class="tcg-product-label">'+esc(item.tcgLabel)+'</span>':"")+'<h3 class="listing-title" title="'+esc(item.title)+'">'+esc(item.title)+'</h3><p class="listing-condition">'+conditionPill+'</p><div class="price-row"><div><small>'+(auction?(item.bids===0?"STARTING BID":"CURRENT BID"):"LISTED PRICE")+'</small><span class="price">'+money(item.price,item.currency)+'</span></div><span class="currency-tag">'+esc(item.currency||"AUD")+'</span></div>'+time+'<div class="listing-meta"><span>⌖ '+esc(item.location||"Location unavailable")+'</span><span>'+esc(item.marketplace||"")+'</span></div>'+priceCompareBlock(item,cat)+'<div class="card-actions">'+(url?'<a class="ebay-link custom-ebay-link" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" aria-label="View this item on eBay"><span class="ebay-inline-brand">eBay</span><span>View on eBay</span><svg class="ui-icon" aria-hidden="true"><use href="/assets/ui/icons.svg#external"></use></svg></a>':'<span class="ebay-link unavailable">eBay listing link unavailable</span>')+'</div></div></article>';
  }).join("");
+}
+function priceCompareBlock(item,cat){
+ const known=item.shipping!=null&&item.shippingCurrency===item.currency;
+ const postage=known?(item.shipping===0?"Free postage":"Postage "+money(item.shipping,item.currency)):"Postage: check eBay";
+ const total=appliedFilters.priceMode==="total"?amountFor(item,"total",item.currency):null;
+ const query=state.mode==="search"&&state.query?state.query:String(item.title||"").split(/\s+-\s+|\s+\|\s+/)[0].slice(0,90);
+ const comparison="/stats.html?q="+encodeURIComponent(query)+"&amp;kind="+(cat==="SEALED"?"SEALED":cat==="ACCESSORIES"?"ACCESSORIES":"CARDS")+"&amp;marketplace="+esc(appliedFilters.marketplace);
+ return '<div class="price-info-note"><span class="price-shipping">'+esc(postage)+'</span>'+(total===null?"":'<strong>Total '+money(total,item.currency)+'</strong>')+'</div><a class="card-compare-link" href="'+comparison+'" title="Compare current asking-price listings">Compare asking prices ↗</a>';
+}
+function updateOverview(){
+ const ending=closingWithin([...state.featured,...state.endingItems],10);
+ const distinct=new Set(ending.map(x=>x.id||x.url));
+ $("#overviewEnding").textContent=state.featured.length||state.endingFetchedAt?String(distinct.size):"—";
+ $("#overviewListings").textContent=state.items.length?String(state.items.length):"—";
+ $("#overviewSaved").textContent=String(state.savedSearches.length);
 }
 function category(item){
  if(["RAW","GRADED","SEALED","ACCESSORIES"].includes(item.productType))return item.productType;

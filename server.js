@@ -72,7 +72,7 @@ async function searchEbay(params) {
     const apiMin=priceMode==="total"?"":(bounds.minCents===null?"":bounds.minCents/100);
     const apiMax=bounds.maxCents===null?"":bounds.maxCents/100;
     if(priceMode==="item"||apiMax!=="")filters.push("price:["+apiMin+".."+apiMax+"]");
-    filters.push("priceCurrency:"+market.currency);
+    if(priceMode==="item"||apiMax!=="")filters.push("priceCurrency:"+market.currency);
   }
   const plan=makeSearchPlan(q);
   const token=await ebayToken();

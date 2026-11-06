@@ -4,6 +4,7 @@ import {readFileSync} from "node:fs";
 import {makeSearchPlan,scoreSearchItem} from "../smart-search.js";
 import {classifyTCGListing} from "../tcg-only.js";
 import {priceBounds,itemInPriceRange,sortByListingPrice} from "../public/price-range.js";
+import {withinBudget} from "../public/market-v2.js";
 
 const file=readFileSync(new URL("../server.js",import.meta.url),"utf8");
 const searchFunction=file.slice(file.indexOf("async function searchEbay(params) {"),file.indexOf("const server=http.createServer"));
@@ -26,10 +27,10 @@ function createMockSearch(){
   return {ok:true,json:async()=>({itemSummaries:items,total:items.length})};
  };
  const make=new Function("makeSearchPlan","scoreSearchItem","classifyTCGListing",
-  "priceBounds","itemInPriceRange","sortByListingPrice","MARKETPLACES",
+  "priceBounds","itemInPriceRange","sortByListingPrice","withinBudget","MARKETPLACES",
   "clean","ebayToken","fetch","URLSearchParams",searchFunction+"return searchEbay;");
  const search=make(makeSearchPlan,scoreSearchItem,classifyTCGListing,
-  priceBounds,itemInPriceRange,sortByListingPrice,
+  priceBounds,itemInPriceRange,sortByListingPrice,withinBudget,
   {AU:{id:"EBAY_AU",currency:"AUD"}},(value,max=120)=>String(value||"").trim().slice(0,max),
   async()=>"mock-token",fakeFetch,URLSearchParams);
  return {search,requests};
@@ -63,4 +64,16 @@ test("invalid price range fails before contacting eBay",async()=>{
   q:"pokemon trading card",marketplace:"AU",minPrice:"300",maxPrice:"220"
  })),/Minimum price cannot be higher/);
  assert.equal(requests.length,0);
+});
+
+test("total-price eBay query never filters out cheaper items before postage is added",async()=>{
+ const {search,requests}=createMockSearch();
+ const result=await search(new URLSearchParams({q:"pokemon prismatic evolutions booster bundle display",marketplace:"AU",type:"ALL",minPrice:"220",maxPrice:"280",priceMode:"total",smart:"0"}));
+ const filter=requests[0].get("filter");
+ assert.match(filter,/price:\[\.\.280\]/);
+ assert.doesNotMatch(filter,/price:\[220/);
+ assert.ok(result.items.every(item=>item.price!==null));
+ // Mock fixtures do not include a known shipping price, and must therefore
+ // NOT be displayed as total-cost matches.
+ assert.equal(result.items.length,0);
 });

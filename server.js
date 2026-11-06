@@ -5,7 +5,7 @@ import { classifyTCGListing } from "./tcg-only.js";
 import { priceBounds, itemInPriceRange, sortByListingPrice } from "./public/price-range.js";
 import { withinBudget, amountFor } from "./public/market-v2.js";
 import { evaluateDeals, validateBenchmark } from "./public/deal-engine.js";
-import { identityOf, findAskingOpportunities } from "./public/ebay-comparables.js";
+import { identityOf, findTieredAskingOpportunities } from "./public/ebay-comparables.js";
 import { filterCollectorListings, sortCollectorListings } from "./public/collector-quality.js";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
@@ -162,25 +162,39 @@ function loadApprovedMarketReferences(){
   return {ready:true,refs:validated,note:"Approved, current market benchmarks supplied by operator."};
  }catch{return {ready:false,refs:[],note:"Market benchmark configuration is invalid."};}
 }
+// Distinct discovery searches cover grades, popular sets, raw singles and
+// individual sealed formats. Some price-sorted searches locate cheap offers
+// that would not appear in a newly-listed-only feed.
 const dealFeedQueries=[
- "pokemon psa 10","pokemon 151 trading card","pokemon booster box",
- "pokemon prismatic evolutions booster bundle","pokemon evolving skies sealed",
- "one piece card game graded","yugioh graded card","magic the gathering foil card"
+ ["pokemon psa 10","newlyListed"],["pokemon psa 9","newlyListed"],
+ ["pokemon cgc 10","newlyListed"],["pokemon graded charizard","newlyListed"],
+ ["pokemon graded umbreon","newlyListed"],["pokemon graded pikachu","newlyListed"],
+ ["pokemon 151 trading card","newlyListed"],["pokemon prismatic evolutions","newlyListed"],
+ ["pokemon surging sparks","newlyListed"],["pokemon evolving skies","newlyListed"],
+ ["pokemon booster box sealed","newlyListed"],["pokemon booster bundle sealed","newlyListed"],
+ ["pokemon elite trainer box","newlyListed"],["pokemon alternate art card","newlyListed"],
+ ["pokemon illustration rare card","newlyListed"],["one piece card game graded","newlyListed"],
+ ["pokemon psa 10","priceAsc"],["pokemon booster box sealed","priceAsc"],
+ ["pokemon booster bundle sealed","priceAsc"],["pokemon 151 trading card","priceAsc"]
 ];
 let dealsCache={};
 async function collectDealCandidates(marketplace){
  const key=marketplace,now=Date.now(),cached=dealsCache[key];
- if(cached&&now-cached.timestamp<120000)return cached.promise;
+ if(cached&&now-cached.timestamp<210000)return cached.promise;
  const promise=(async()=>{
   const items=[];
-  for(let i=0;i<dealFeedQueries.length;i+=3){
-   const batch=await Promise.allSettled(dealFeedQueries.slice(i,i+3).map(q=>
-    cachedSearch(new URLSearchParams({q,marketplace,type:"FIXED",sort:"newlyListed",limit:"50",smart:"0"}))));
+  for(let i=0;i<dealFeedQueries.length;i+=4){
+   const batch=await Promise.allSettled(dealFeedQueries.slice(i,i+4).map(([q,sort])=>
+    cachedSearch(new URLSearchParams({q,marketplace,type:"FIXED",sort,limit:"50",smart:"0"}))));
    for(const response of batch)if(response.status==="fulfilled")items.push(...(response.value.items||[]));
   }
   const unique=new Map();
   for(const item of items)if(item?.id&&!unique.has(item.id)&&item.url)unique.set(item.id,item);
-  return sortCollectorListings(filterCollectorListings([...unique.values()],"COLLECTOR")).slice(0,160);
+  const clean=filterCollectorListings([...unique.values()],"COLLECTOR");
+  // Prevent graded listings monopolising the pool before raw and sealed items
+  // have a chance to be examined. This is a bounded sample, not the entire market.
+  return ["GRADED","SEALED","RAW"].flatMap(kind=>
+   sortCollectorListings(clean.filter(item=>item.productType===kind)).slice(0,100));
  })();
  dealsCache[key]={timestamp:now,promise};
  try{return await promise;}catch(error){delete dealsCache[key];throw error;}
@@ -190,37 +204,32 @@ function comparisonQuery(identity){
  return [identity.names.slice(0,2).join(" "),identity.number,identity.set,
   identity.grade||""].join(" ").replace(/\s+/g," ").trim().slice(0,100);
 }
-function comparisonGroups(candidates){
- const all=candidates.filter(item=>identityOf(item));
+function comparisonGroups(candidates,category="ALL"){
+ const all=candidates.filter(item=>(category==="ALL"||item.productType===category)&&identityOf(item));
  const groups=new Map();
- // Prioritise the lowest combined known cost within a group. Unknown postage
- // is not used as zero in price comparisons.
- all.sort((a,b)=>{
-  const ac=amountFor(a,"total",a.currency)??Infinity;
-  const bc=amountFor(b,"total",b.currency)??Infinity;
-  return ac-bc;
- });
+ all.sort((a,b)=>(amountFor(a,"total",a.currency)??Infinity)-(amountFor(b,"total",b.currency)??Infinity));
  for(const item of all){
   const identity=identityOf(item);
-  const key=JSON.stringify(identity);
+  // Titles with different word order should share one targeted search.
+  const key=[identity.kind,identity.set,identity.number||"",identity.grade||"",
+   identity.language,identity.condition||"",identity.edition,identity.productFormat||""].join("|");
   if(!groups.has(key))groups.set(key,{identity,item});
  }
  const selected=[],counts={RAW:0,GRADED:0,SEALED:0};
- // Include all three product types rather than being swamped by slabs.
  for(const group of groups.values()){
   const kind=group.identity.kind;
-  if(counts[kind]>=6||selected.length>=15)continue;
+  if(counts[kind]>=(category==="ALL"?12:26)||selected.length>=30)continue;
   selected.push(group);counts[kind]++;
  }
  return selected;
 }
 let comparableCache=new Map();
-async function collectComparableUniverse(marketplace,candidates){
- const now=Date.now();
- const cache=comparableCache.get(marketplace);
- if(cache&&now-cache.timestamp<150000)return cache.promise;
+async function collectComparableUniverse(marketplace,candidates,category="ALL"){
+ const now=Date.now(),cacheKey=marketplace+"|"+category;
+ const cache=comparableCache.get(cacheKey);
+ if(cache&&now-cache.timestamp<240000)return cache.promise;
  const promise=(async()=>{
-  const groups=comparisonGroups(candidates);
+  const groups=comparisonGroups(candidates,category);
   const listings=[...candidates],errors=[];
   let completed=0;
   for(let i=0;i<groups.length;i+=3){
@@ -238,9 +247,9 @@ async function collectComparableUniverse(marketplace,candidates){
   for(const item of listings)if(item?.id&&!unique.has(item.id)&&item.url)unique.set(item.id,item);
   return {items:[...unique.values()],groups:groups.length,completed,failed:errors.length};
  })();
- comparableCache.set(marketplace,{timestamp:now,promise});
- if(comparableCache.size>4)comparableCache.delete(comparableCache.keys().next().value);
- try{return await promise;}catch(error){comparableCache.delete(marketplace);throw error;}
+ comparableCache.set(cacheKey,{timestamp:now,promise});
+ if(comparableCache.size>8)comparableCache.delete(comparableCache.keys().next().value);
+ try{return await promise;}catch(error){comparableCache.delete(cacheKey);throw error;}
 }
 async function getMarketDeals(params){
  const marketplace=params.get("marketplace")==="US"?"US":"AU";
@@ -248,24 +257,26 @@ async function getMarketDeals(params){
  const threshold=[10,15,20,25,30].includes(Number(params.get("minDiscount")))?Number(params.get("minDiscount")):15;
  const currency=marketplace==="AU"?"AUD":"USD";
  const candidates=await collectDealCandidates(marketplace);
- const universe=await collectComparableUniverse(marketplace,candidates);
+ const universe=await collectComparableUniverse(marketplace,candidates,category);
  const target=candidates.filter(item=>(category==="ALL"||item.productType===category)&&identityOf(item));
- const result=findAskingOpportunities(target,universe.items,{currency,minDiscount:threshold,minPeers:3});
- const chosen=result.deals.slice(0,24);
- const exclude=new Set(chosen.map(d=>d.item.id));
+ const result=findTieredAskingOpportunities(target,universe.items,{currency,minDiscount:threshold,minPeers:3});
+ const chosen=result.deals.slice(0,24),potential=result.potential.slice(0,24),watchlist=result.watchlist.slice(0,18);
+ const exclude=new Set([...result.deals,...result.potential,...result.watchlist].map(d=>d.item.id));
  const preview=candidates.filter(item=>(category==="ALL"||item.productType===category)&&!exclude.has(item.id)).slice(0,18).map(item=>({
   id:item.id,title:item.title,category:item.productType,condition:item.condition,image:item.image,
   url:item.url,currency:item.currency,itemPrice:item.price,shipping:item.shipping,
   shippingCurrency:item.shippingCurrency,total:amountFor(item,"total",currency),
-  note:identityOf(item)?"Not enough validated comparable active asking prices to mark below reference.":"Exact product, condition or language cannot be reliably determined from seller details."
+  note:identityOf(item)
+   ?"No qualifying price signal was established at this threshold, or there were not enough matched sellers."
+   :"Exact card, condition, language or sealed format could not be reliably matched from seller details."
  }));
  return {
   basis:"EBAY_ACTIVE_ASKING",ready:true,sourceStatus:"Live eBay Buy It Now asking-price comparison",
   currency,category,checkedListings:candidates.length,comparableListings:universe.items.length,
   comparisonSearches:universe.completed,failedSearches:universe.failed,
   matchedIdentityCandidates:result.eligibleProducts,
-  discountThreshold:threshold,deals:chosen,preview,
-  warning:"Discounts compare active ASKING prices from distinct sellers, not sales or verified market value. Item authenticity, exact condition, stock, taxes and seller reliability require independent checking.",
+  discountThreshold:threshold,deals:chosen,potential,watchlist,preview,
+  warning:"The strong, potential and watchlist sections compare ACTIVE ASKING prices only, not completed sales or independently verified market value. One-peer leads never receive an estimated percentage. Check seller, exact product, postage, taxes and authenticity.",
   sources:["eBay active Buy It Now listings"],refreshedAt:new Date().toISOString()
  };
 }
@@ -273,7 +284,7 @@ const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,"http://localhost");
   if (await deletionChallenge(req,res,url)) return;
   if(req.method==="GET"&&url.pathname==="/api/health")return send(res,200,{ok:true,ebayConfigured:Boolean(process.env.EBAY_CLIENT_ID&&process.env.EBAY_CLIENT_SECRET)});
-  if(req.method==="GET"&&url.pathname==="/api/version")return send(res,200,{ui:"v3-asking-20261106-1",commit:process.env.RENDER_GIT_COMMIT?.slice(0,12)||null});
+  if(req.method==="GET"&&url.pathname==="/api/version")return send(res,200,{ui:"v3-early-signals-20261106-2",commit:process.env.RENDER_GIT_COMMIT?.slice(0,12)||null});
   if(req.method==="GET"&&url.pathname==="/api/search"){try{return send(res,200,await cachedSearch(url.searchParams));}catch(error){return send(res,502,{error:error.message||"Search unavailable"});}}
   if(req.method==="GET"&&url.pathname==="/api/deals"){try{return send(res,200,await getMarketDeals(url.searchParams));}catch(error){console.warn("Deal discovery unavailable",error.message);return send(res,502,{error:"Live deal discovery is temporarily unavailable. Try again."});}}
   if(req.method==="GET"&&url.pathname==="/api/sold")return send(res,200,{available:false,items:[],message:"Verified sold-history access is not connected. eBay Marketplace Insights access is restricted; no sold prices are fabricated or scraped."});
@@ -281,6 +292,6 @@ const server=http.createServer(async(req,res)=>{
   const requested=url.pathname==="/"? "index.html":decodeURIComponent(url.pathname.slice(1));
   const safePath=normalize(requested).replace(/^([.][.][/\\])+/, ""),file=join(PUBLIC,safePath);
   if(!file.startsWith(PUBLIC))return send(res,403,{error:"Forbidden"});
-  try{const body=await readFile(file);res.writeHead(200,{"Content-Type":mime[extname(file)]||"application/octet-stream","X-Content-Type-Options":"nosniff","Cache-Control":"no-store, max-age=0, must-revalidate","X-TCG-UI-Version":"v3-asking-20261106-1"});res.end(body);}catch{send(res,404,"Not found","text/plain; charset=utf-8");}
+  try{const body=await readFile(file);res.writeHead(200,{"Content-Type":mime[extname(file)]||"application/octet-stream","X-Content-Type-Options":"nosniff","Cache-Control":"no-store, max-age=0, must-revalidate","X-TCG-UI-Version":"v3-early-signals-20261106-2"});res.end(body);}catch{send(res,404,"Not found","text/plain; charset=utf-8");}
 });
 server.listen(PORT,()=>console.log("TCG Bid Buy Watch running on port "+PORT));

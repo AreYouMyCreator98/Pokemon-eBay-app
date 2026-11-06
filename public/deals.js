@@ -24,18 +24,24 @@ function renderCard(item,deal=null){
  const listed=deal?item.price:item.itemPrice,shipping=item.shipping;
  const total=deal?deal.listedTotal:item.total;
  const shippingKnown=shipping!==null&&shipping!==undefined&&item.shippingCurrency===currency;
- let extra="";
+ let extra="",tier=deal?.tier||"BROWSE";
  if(deal){
-  extra='<div class="deal-ref"><div><span>Lower-quartile comparable asking price</span><strong>'+money(deal.reference,currency)+'</strong>'+
-   '<span>Matching-listing median: '+money(deal.median,currency)+'</span></div>'+
-   '<span class="deal-saving">−'+esc(deal.discountPercent)+'%</span></div>'+
-   '<div class="deal-sources"><b>Potential deal · '+esc(deal.confidence)+' comparison sample</b> · '+esc(deal.peerCount)+
-   ' other sellers · Checked '+esc(new Date(deal.comparedAt).toLocaleTimeString("en-AU",{hour:"numeric",minute:"2-digit"}))+
-   '. Not sold prices or guaranteed value.</div>'+peerEvidence(deal,currency);
+  const onePeer=tier==="WATCHLIST",twoPeers=tier==="POTENTIAL";
+  const header=onePeer?"One other asking price":twoPeers?"Lowest of 2 matching asking prices":"Lower-quartile comparable asking price";
+  const label=onePeer?"Watchlist only · 1 comparison":twoPeers?"Potential bargain · 2 comparisons":"Strong price signal · 3+ comparisons";
+  const savings=onePeer?'<span class="deal-watch-label">No %</span>':
+   '<span class="deal-saving">−'+esc(deal.discountPercent)+'%</span>';
+  extra='<div class="deal-ref"><div><span>'+header+'</span><strong>'+money(deal.reference,currency)+'</strong>'+
+   (!onePeer&&!twoPeers?'<span>Matching-listing median: '+money(deal.median,currency)+'</span>':'')+
+   '</div>'+savings+'</div>'+
+   '<div class="deal-sources"><b>'+label+'</b> · '+esc(deal.peerCount)+' independent seller'+(deal.peerCount===1?"":"s")+
+   ' · Checked '+esc(new Date(deal.comparedAt).toLocaleTimeString("en-AU",{hour:"numeric",minute:"2-digit"}))+
+   '. '+(onePeer?"Too little evidence to infer a discount.":twoPeers?"Early signal only; not a reliable market benchmark.":"Asking-price comparison only; not proven below market.")+
+   '</div>'+peerEvidence(deal,currency);
  }else{
-  extra='<div class="deal-sources"><b>Not a verified deal.</b> '+esc(item.note||"No reliable same-product comparison was available for this listing.")+'</div>';
+  extra='<div class="deal-sources"><b>Not a validated price signal.</b> '+esc(item.note||"No reliable same-product comparison was available for this listing.")+'</div>';
  }
- return '<article class="deal-card"><div class="deal-card-image">'+imageTag(item)+
+ return '<article class="deal-card deal-tier-'+tier.toLowerCase()+'"><div class="deal-card-image">'+imageTag(item)+
   '<span class="deal-kind">'+esc((item.productType||item.category||"TCG").toUpperCase())+'</span></div>'+
   '<div class="deal-card-body"><h3 class="deal-card-title" title="'+esc(item.title)+'">'+esc(item.title)+'</h3>'+
   '<span class="deal-card-condition">'+esc(item.condition||"Condition not provided")+'</span>'+
@@ -56,16 +62,24 @@ async function loadDeals(){
   if(serial!==requestId)return;
   if(!response.ok)throw Error(data.error||"Unable to load live listings");
   const count=Number(data.deals?.length||0);
-  $("#dealsState").classList.toggle("no-data",count===0);
+  const early=Number(data.potential?.length||0),watch=Number(data.watchlist?.length||0);
+  $("#dealsState").classList.toggle("no-data",count+early+watch===0);
   $("#dealsState").textContent=
-   count+" potential price opportunity"+(count===1?"":"ies")+" found from "+data.checkedListings+" collector listings, "+
+   count+" strong signal"+(count===1?"":"s")+", "+early+" potential bargain"+(early===1?"":"s")+" and "+
+   watch+" watchlist lead"+(watch===1?"":"s")+" from "+data.checkedListings+" collector listings, "+
    data.comparableListings+" sampled live eBay listings and "+data.comparisonSearches+" targeted comparisons."+
    (data.failedSearches?" "+data.failedSearches+" comparison searches were unavailable; results are partial.":"")+
-   " Prices are active asking prices, not completed sales. Updated "+new Date(data.refreshedAt).toLocaleTimeString("en-AU",{hour:"numeric",minute:"2-digit"})+".";
-  $("#dealCount").textContent=count+" potential";
+   " All comparisons use current asking prices, not completed sales. Updated "+new Date(data.refreshedAt).toLocaleTimeString("en-AU",{hour:"numeric",minute:"2-digit"})+".";
+  $("#dealCount").textContent=count+" strong";
+  $("#potentialCount").textContent=early+" possible";
+  $("#watchlistCount").textContent=watch+" leads";
   $("#candidateCount").textContent=(data.preview||[]).length+" shown";
   $("#confirmedDeals").innerHTML=count?data.deals.map(x=>renderCard(x.item,x)).join(""):
-   '<div class="deal-placeholder">No listings met the selected price threshold with at least three matching sellers in this sample. This does not mean no bargains exist. Try 10% or select another category.</div>';
+   '<div class="deal-placeholder">No listings passed the strict three-seller lower-quartile check at this discount threshold. Check potential bargains and watchlist leads below.</div>';
+  $("#potentialDeals").innerHTML=early?data.potential.map(x=>renderCard(x.item,x)).join(""):
+   '<div class="deal-placeholder">No two-seller price opportunities met your selected threshold in this sample.</div>';
+  $("#watchlistDeals").innerHTML=watch?data.watchlist.map(x=>renderCard(x.item,x)).join(""):
+   '<div class="deal-placeholder">No single-comparison leads met your selected threshold in this sample.</div>';
   $("#dealCandidates").innerHTML=data.preview?.length?data.preview.map(x=>renderCard(x)).join(""):
    '<div class="deal-placeholder">No other collector listings available for this selection.</div>';
  }catch(error){
@@ -74,7 +88,11 @@ async function loadDeals(){
   $("#dealsState").textContent=error.message||"Live eBay comparisons are unavailable.";
   $("#dealCount").textContent="Unavailable";
   $("#candidateCount").textContent="Unavailable";
+  $("#potentialCount").textContent="Unavailable";
+  $("#watchlistCount").textContent="Unavailable";
   $("#confirmedDeals").innerHTML='<div class="deal-placeholder">Could not validate comparable listing prices right now.</div>';
+  $("#potentialDeals").innerHTML='<div class="deal-placeholder">Comparison searches unavailable.</div>';
+  $("#watchlistDeals").innerHTML='<div class="deal-placeholder">Comparison searches unavailable.</div>';
   $("#dealCandidates").innerHTML='<div class="deal-placeholder">Could not retrieve eBay listings right now.</div>';
  }finally{if(serial===requestId)button.disabled=false;}
 }

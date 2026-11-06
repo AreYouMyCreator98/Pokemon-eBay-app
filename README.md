@@ -119,3 +119,12 @@ Good Deals now uses the **existing authorised eBay Browse API**, and **does not 
 - See `public/ebay-comparables.js` and `test/ebay-comparables.test.js` for the implemented validation and edge-case coverage.
 
 No external website is scraped and no quotes or sales are invented. The product remains read-only and opens original eBay listings to review or buy.
+
+
+## Good Deals Finder — stronger coverage and evidence tiers
+- Samples a wider mix of live eBay Buy It Now searches (including price-ascending candidates), then searches targeted comparable products for the selected category.
+- **Strong price signals:** at least three other sellers with closely matched listing identities and a discount relative to the observed lower quartile of their active asking prices.
+- **Potential bargains:** only two independent comparable sellers; the candidate must beat even the cheaper of their total known asking costs by the selected threshold. These are *early signals*, not verified bargains.
+- **Watchlist leads:** one comparator only. Shown without a numeric claimed discount or estimated market value.
+- All tiers require a known same-currency item + postage total and compare only Buy It Now offers with separate identifiable sellers; they exclude auctions, obvious replicas, mystery lots and unmatched grades, languages, card numbers or sealed formats.
+- Evidence links let users inspect the specific comparison listings. The sampled listings do not constitute the entire eBay market, and asking prices do not establish sold-price market value. No extra pricing keys or web scraping are used.

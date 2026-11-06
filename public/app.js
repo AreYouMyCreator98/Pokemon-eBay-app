@@ -146,26 +146,35 @@ async function loadSpotlight(){
   if(selected.shipsTo!=="ANY")p.set("shipsTo",selected.shipsTo);
   if(selected.minPrice!=="")p.set("minPrice",selected.minPrice);
   if(selected.maxPrice!=="")p.set("maxPrice",selected.maxPrice);
+  p.set("priceMode",selected.priceMode);
   const response=await fetch("/api/search?"+p);
   if(!response.ok)throw Error("Auction feed unavailable");
   const data=await response.json();
   if(serial!==spotlightSerial)return;
-  state.featured=(data.items||[]).filter(x=>
-   (x.buyingOptions||[]).includes("AUCTION")&&x.endTime&&new Date(x.endTime)>new Date()&&x.url&&itemInPriceRange(x,bounds,currency)
-  ).sort((a,b)=>new Date(a.endTime)-new Date(b.endTime)).slice(0,12);
+  state.featured=closingWithin(data.items||[],10).filter(x=>withinBudget(x,bounds,currency,selected.priceMode)).slice(0,12);
   state.featureIndex=0;
-  $("#spotTrack").innerHTML=state.featured.length?state.featured.map(spotlightCard).join(""):'<div class="spotlight-loading">'+(filtersOn?"No live auction highlights within your price range. Adjust your budget to see more.":"No ending-soon auctions returned right now. Try searching below.")+'</div>';
+  $("#spotTrack").innerHTML=state.featured.length?state.featured.map(spotlightCard).join(""):'<div class="spotlight-loading">'+(filtersOn?"No live auction highlights within your price range. Adjust your budget to see more.":"No verified auctions closing in the next 10 minutes right now. Try the Ending soon tab.")+'</div>';
   $("#spotTrack").style.transform="translateX(0)";
-  moveSpotlight(0);
+  moveSpotlight(0);state.spotlightFetchedAt=Date.now();updateOverview();
  }catch(error){
   if(serial!==spotlightSerial)return;
-  $("#spotTrack").innerHTML='<div class="spotlight-loading">Live auction highlights are temporarily unavailable. Search below for current listings.</div>';
+  $("#spotTrack").innerHTML='<div class="spotlight-loading">Live auction highlights are temporarily unavailable. Search below for current listings.</div>';state.spotlightFetchedAt=Date.now();updateOverview();
+ }
+}
+function pruneSpotlight(){
+ const fresh=closingWithin(state.featured,10);
+ if(fresh.length!==state.featured.length){
+   state.featured=fresh;state.featureIndex=0;
+   $("#spotTrack").innerHTML=fresh.length?fresh.map(spotlightCard).join(""):'<div class="spotlight-loading">No active auctions within 10 minutes. New listings are checked periodically.</div>';
+   $("#spotTrack").style.transform="translateX(0)";moveSpotlight(0);updateOverview();
  }
 }
 // Auction highlights refresh after applying marketplace, shipping or price changes.
 $("#spotPrev").addEventListener("click",()=>moveSpotlight(-1));$("#spotNext").addEventListener("click",()=>moveSpotlight(1));
 $("#spotWindow").addEventListener("mouseenter",()=>state.spotPaused=true);$("#spotWindow").addEventListener("mouseleave",()=>state.spotPaused=false);$("#spotWindow").addEventListener("touchstart",event=>{state.spotTouchX=event.touches[0].clientX;state.spotPaused=true;},{passive:true});$("#spotWindow").addEventListener("touchend",event=>{if(state.spotTouchX!=null){const delta=event.changedTouches[0].clientX-state.spotTouchX;if(Math.abs(delta)>45)moveSpotlight(delta<0?1:-1);}state.spotTouchX=null;state.spotPaused=false;},{passive:true});
-setInterval(()=>{if(!state.spotPaused&&!document.hidden)moveSpotlight(1);},6500);loadSpotlight();
+setInterval(()=>{if(!state.spotPaused&&!document.hidden)moveSpotlight(1);},6500);
+setInterval(()=>{if(document.hidden)return;pruneSpotlight();if(Date.now()-(state.spotlightFetchedAt||0)>120000)void loadSpotlight();},15000);
+loadSpotlight();
 // Four independent eBay discovery feeds, interleaved so one TCG cannot dominate the page.
 const TCG_FEEDS=[
  {id:"POKEMON",label:"Pokémon",q:"pokemon trading card"},
@@ -174,7 +183,7 @@ const TCG_FEEDS=[
  {id:"MTG",label:"Magic: The Gathering",q:"magic the gathering mtg card"},
  {id:"ACCESSORIES",label:"TCG Binders & Supplies",q:"trading card binder"}
 ];
-function feedContext(){return {marketplace:appliedFilters.marketplace,shipFrom:appliedFilters.shipFrom,shipsTo:appliedFilters.shipsTo,minPrice:appliedFilters.minPrice,maxPrice:appliedFilters.maxPrice};}
+function feedContext(){return {marketplace:appliedFilters.marketplace,shipFrom:appliedFilters.shipFrom,shipsTo:appliedFilters.shipsTo,minPrice:appliedFilters.minPrice,maxPrice:appliedFilters.maxPrice,priceMode:appliedFilters.priceMode};}
 function feedContextKey(type){return type+"|"+JSON.stringify(feedContext());}
 function feedQuery(game,type){
  const f=feedContext(),p=new URLSearchParams({q:game.q,marketplace:f.marketplace,type,sort:type==="FIXED"?"newlyListed":"endingSoonest",limit:type==="FIXED"?"24":"50",smart:"0"});
@@ -182,6 +191,7 @@ function feedQuery(game,type){
  if(f.shipsTo!=="ANY")p.set("shipsTo",f.shipsTo);
  if(f.minPrice)p.set("minPrice",f.minPrice);
  if(f.maxPrice)p.set("maxPrice",f.maxPrice);
+ p.set("priceMode",f.priceMode);
  return "/api/search?"+p.toString();
 }
 async function fetchTCGBuckets(type){
@@ -215,7 +225,7 @@ async function loadDiscovery(force=false){
   if(requestId!==state.discoverRequestId)return;
   if(!result.successes)throw Error("All four eBay discovery feeds are temporarily unavailable.");
   const differentKey=state.discoverKey!==key;
-  state.discoverItems=result.items;state.discoverKey=key;state.discoverFetchedAt=Date.now();
+  state.discoverItems=result.items;state.discoverKey=key;state.discoverFetchedAt=Date.now();updateOverview();
   if(differentKey)state.discoverPage=0;
   if(state.tab==="discover"&&state.mode==="feed"){
    state.items=state.discoverItems;
@@ -244,7 +254,7 @@ async function loadEndingSoon(force=false){
   const result=await fetchTCGBuckets("AUCTION");
   if(requestId!==state.endingRequestId)return;
   if(!result.successes)throw Error("All four eBay auction feeds are temporarily unavailable.");
-  state.endingItems=result.items;state.endingKey=key;state.endingFetchedAt=Date.now();
+  state.endingItems=result.items;state.endingKey=key;state.endingFetchedAt=Date.now();updateOverview();
   if(state.tab==="ending"){
    state.items=state.endingItems;
    const now=Date.now(),near=result.items.filter(item=>new Date(item.endTime).getTime()>now&&new Date(item.endTime).getTime()<=now+state.endingWindow*60000).length;
@@ -296,6 +306,7 @@ async function search(){
  if(appliedFilters.shipsTo!=="ANY")p.set("shipsTo",appliedFilters.shipsTo);
  if(appliedFilters.minPrice!=="")p.set("minPrice",appliedFilters.minPrice);
  if(appliedFilters.maxPrice!=="")p.set("maxPrice",appliedFilters.maxPrice);
+ p.set("priceMode",appliedFilters.priceMode);
  try{
   const response=await fetch("/api/search?"+p);
   const data=await response.json();
@@ -360,7 +371,7 @@ if("serviceWorker"in navigator){
    }).catch(()=>{});
  },{once:true});
 }
-state.items=[];render();setInterval(()=>{document.querySelectorAll("[data-end]").forEach(el=>el.textContent=remaining(el.dataset.end));checkAlerts();},15000);
+state.items=[];render();setInterval(()=>{document.querySelectorAll("[data-end]").forEach(el=>el.textContent=remaining(el.dataset.end));checkAlerts();if(state.tab==="ending"&&!document.hidden)render();},15000);
 
 
 // Holographic quick controls: separate Stats page and an accessible Info modal.
@@ -397,8 +408,8 @@ function updateFilterSummary(){
  const bounds=priceBounds(appliedFilters),currency=appliedFilters.marketplace==="US"?"USD":"AUD";
  const format=value=>new Intl.NumberFormat("en-AU",{style:"currency",currency}).format(value/100);
  const band=bounds.active?(bounds.minCents===null?"Up to "+format(bounds.maxCents):bounds.maxCents===null?format(bounds.minCents)+" and up":format(bounds.minCents)+" – "+format(bounds.maxCents)):"";
- const notice=$("#activePriceBand");notice.classList.toggle("hidden",!bounds.active);notice.textContent=bounds.active?"PRICE FILTER ACTIVE · "+band+" · Item price only (shipping extra)":"";
- const names={shipFrom:"From",shipsTo:"Ships to",marketplace:"Market",listingType:"Type",sortBy:"Sort",minPrice:"Min",maxPrice:"Max",setFilter:"Set",gradeFilter:"Grade",conditionFilter:"Condition"};
+ const notice=$("#activePriceBand");notice.classList.toggle("hidden",!bounds.active);notice.textContent=bounds.active?"PRICE FILTER ACTIVE · "+band+" · "+(appliedFilters.priceMode==="total"?"Item + known postage, taxes extra":"Item price only, postage extra"):"";
+ const names={shipFrom:"From",shipsTo:"Ships to",marketplace:"Market",listingType:"Type",sortBy:"Sort",minPrice:"Min",maxPrice:"Max",setFilter:"Set",gradeFilter:"Grade",conditionFilter:"Condition",priceMode:"Price basis",cardNumberFilter:"Card #",languageFilter:"Language"};
  const chosen=active.map(id=>{
   const field=$("#"+id);
   const value=(field.tagName==="SELECT"?field.selectedOptions[0]?.textContent:field.value)||appliedFilters[id];
@@ -443,7 +454,7 @@ function applySearchFilters(){
  if(state.tab==="ending")void loadEndingSoon(true);
  else if(state.mode==="feed")void loadDiscovery(true);
  else if(state.query)void search();
- if(previous.shipFrom!==next.shipFrom||previous.shipsTo!==next.shipsTo||previous.marketplace!==next.marketplace||previous.minPrice!==next.minPrice||previous.maxPrice!==next.maxPrice)void loadSpotlight();
+ if(previous.shipFrom!==next.shipFrom||previous.shipsTo!==next.shipsTo||previous.marketplace!==next.marketplace||previous.minPrice!==next.minPrice||previous.maxPrice!==next.maxPrice||previous.priceMode!==next.priceMode)void loadSpotlight();
 }
 $("#filterToggle").addEventListener("click",()=>setFiltersOpen($("#filtersContent").classList.contains("hidden")));
 $("#filterSummary").addEventListener("click",()=>setFiltersOpen(true));

@@ -3,7 +3,9 @@ import { deletionChallenge } from "./ebay-deletion.js";
 import { makeSearchPlan, scoreSearchItem } from "./smart-search.js";
 import { classifyTCGListing } from "./tcg-only.js";
 import { priceBounds, itemInPriceRange, sortByListingPrice } from "./public/price-range.js";
-import { withinBudget } from "./public/market-v2.js";
+import { withinBudget, amountFor } from "./public/market-v2.js";
+import { evaluateDeals } from "./public/deal-engine.js";
+import { filterCollectorListings, sortCollectorListings } from "./public/collector-quality.js";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -144,12 +146,73 @@ async function cachedSearch(params){
  }
  try{return await promise;}catch(error){searchCache.delete(key);throw error;}
 }
+// Market references must be supplied by a licensed, approved data provider.
+// Do not use scraping, unlicensed external feeds, or fabricated benchmark values.
+function loadApprovedMarketReferences(){
+ const licensed=process.env.MARKET_REFERENCE_LICENSE_CONFIRMED==="true";
+ if(!licensed)return {ready:false,refs:[],note:"Market-source permissions and approved reference prices are not configured."};
+ const raw=process.env.MARKET_REFERENCE_DATA_JSON;
+ if(!raw)return {ready:false,refs:[],note:"Licensed market price reference feed has not been configured."};
+ try{
+  const quotes=JSON.parse(raw);
+  if(!Array.isArray(quotes)||quotes.length>3000)throw new Error("Invalid reference format");
+  return {ready:true,refs:quotes,note:"Approved market benchmarks supplied by operator."};
+ }catch{return {ready:false,refs:[],note:"Market benchmark configuration is invalid."};}
+}
+const dealFeedQueries=[
+ "pokemon psa 10","pokemon 151 trading card","pokemon booster box",
+ "one piece card game graded","yugioh graded card","magic the gathering foil card"
+];
+let dealsCache={};
+async function collectDealCandidates(marketplace){
+ const key=marketplace,now=Date.now();
+ const cached=dealsCache[key];
+ if(cached&&now-cached.timestamp<90000)return cached.promise;
+ const promise=(async()=>{
+  const results=[];
+  for(let i=0;i<dealFeedQueries.length;i+=3){
+   const group=dealFeedQueries.slice(i,i+3);
+   const settled=await Promise.allSettled(group.map(q=>cachedSearch(new URLSearchParams({q,marketplace,type:"FIXED",sort:"newlyListed",limit:"35",smart:"0"}))));
+   for(const result of settled)if(result.status==="fulfilled")results.push(...(result.value.items||[]));
+  }
+  const unique=new Map();
+  for(const item of results)if(item?.id&&!unique.has(item.id)&&item.url)unique.set(item.id,item);
+  return sortCollectorListings(filterCollectorListings([...unique.values()],"COLLECTOR")).slice(0,80);
+ })();
+ dealsCache[key]={timestamp:now,promise};
+ try{return await promise;}catch(error){delete dealsCache[key];throw error;}
+}
+async function getMarketDeals(params){
+ const marketplace=params.get("marketplace")==="US"?"US":"AU";
+ const type=["ALL","RAW","GRADED","SEALED"].includes(params.get("category"))?params.get("category"):"ALL";
+ const threshold=[10,15,20,25,30].includes(Number(params.get("minDiscount")))?Number(params.get("minDiscount")):15;
+ const refs=loadApprovedMarketReferences();
+ const candidates=(await collectDealCandidates(marketplace)).filter(x=>type==="ALL"||x.productType===type);
+ const matches=refs.ready?evaluateDeals(candidates,refs.refs,{marketplace,minDiscount:threshold}):[];
+ const currency=marketplace==="AU"?"AUD":"USD";
+ const preview=candidates.slice(0,18).map(item=>({
+  id:item.id,title:item.title,category:item.productType,condition:item.condition,
+  image:item.image,url:item.url,currency:item.currency,
+  itemPrice:item.price,shipping:item.shipping,shippingCurrency:item.shippingCurrency,
+  total:amountFor(item,"total",currency),
+  note:"Unverified eBay candidate. No approved matching market valuation is available for this card or product."
+ }));
+ return {
+  ready:refs.ready,benchmarksConnected:refs.ready,sourceStatus:refs.note,
+  currency,category:type,checkedListings:candidates.length,discountThreshold:threshold,
+  deals:matches,preview:refs.ready?preview.filter(x=>!matches.some(d=>d.item.id===x.id)).slice(0,12):preview,
+  warning:"A discount to a reference estimate is not a guarantee of authenticity, condition, availability, total cost or the best deal. Prices and stock can change before checkout.",
+  sources:["TCGplayer","PriceCharting","Collectr"],
+  refreshedAt:new Date().toISOString()
+ };
+}
 const server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,"http://localhost");
   if (await deletionChallenge(req,res,url)) return;
   if(req.method==="GET"&&url.pathname==="/api/health")return send(res,200,{ok:true,ebayConfigured:Boolean(process.env.EBAY_CLIENT_ID&&process.env.EBAY_CLIENT_SECRET)});
-  if(req.method==="GET"&&url.pathname==="/api/version")return send(res,200,{ui:"v22-20261106-1",commit:process.env.RENDER_GIT_COMMIT?.slice(0,12)||null});
+  if(req.method==="GET"&&url.pathname==="/api/version")return send(res,200,{ui:"v3-20261106-1",commit:process.env.RENDER_GIT_COMMIT?.slice(0,12)||null});
   if(req.method==="GET"&&url.pathname==="/api/search"){try{return send(res,200,await cachedSearch(url.searchParams));}catch(error){return send(res,502,{error:error.message||"Search unavailable"});}}
+  if(req.method==="GET"&&url.pathname==="/api/deals"){try{return send(res,200,await getMarketDeals(url.searchParams));}catch(error){console.warn("Deal discovery unavailable",error.message);return send(res,502,{error:"Live deal discovery is temporarily unavailable. Try again."});}}
   if(req.method==="GET"&&url.pathname==="/api/sold")return send(res,200,{available:false,items:[],message:"Verified sold-history access is not connected. eBay Marketplace Insights access is restricted; no sold prices are fabricated or scraped."});
   if(req.method!=="GET")return send(res,405,{error:"Method not allowed"});
   const requested=url.pathname==="/"? "index.html":decodeURIComponent(url.pathname.slice(1));

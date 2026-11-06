@@ -10,6 +10,7 @@
     doc.dataset.theme = theme;
     doc.style.colorScheme = theme;
     if (meta) meta.setAttribute("content", theme === "dark" ? "#111720" : "#f7f9fc");
+    document.querySelectorAll(".tcg-brand-logo, .stats-brand img, #introLogo").forEach(img => { const desired = theme === "dark" ? "/assets/ui/tcg-logo-dark.svg" : "/assets/ui/tcg-logo-clean.svg"; if (img.getAttribute("src") !== desired) img.setAttribute("src", desired); });
     document.querySelectorAll("[data-theme-toggle]").forEach(button => {
       const dark = theme === "dark";
       button.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");

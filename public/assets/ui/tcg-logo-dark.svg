@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 226" role="img" aria-labelledby="title description">
+<title id="title">TCG Bid Buy Watch</title><desc id="description">Minimal dark collector lettering with five soft pastel illustrated trading-card symbols</desc>
+<g fill="#fff" stroke-width="3" stroke-linejoin="round">
+<g transform="translate(72 29) rotate(-16 58 67)"><rect width="112" height="137" rx="12" stroke="#d5a9cd" fill="#faf4fb"/><circle cx="56" cy="61" r="28" fill="#eeb3d5" stroke="#b57d9f"/><path d="M30 61h52" stroke="#a6658f" stroke-width="6"/><circle cx="56" cy="61" r="8" fill="#fff" stroke="#a6658f"/></g>
+<g transform="translate(170 12) rotate(-6 56 66)"><rect width="112" height="137" rx="12" fill="#f8f4fc" stroke="#b7a9dc"/><path d="m56 31 10 25h28L71 73l9 28-24-17-24 17 9-28-23-17h28z" fill="#9e8ad4" stroke="#9e8ad4"/></g>
+<g transform="translate(281 5)"><rect width="112" height="137" rx="12" fill="#fff9ed" stroke="#d9bd83"/><circle cx="56" cy="65" r="31" fill="#ecc87c" stroke="#d6a95a"/><g fill="#af8745" stroke="none"><circle cx="44" cy="57" r="4"/><circle cx="68" cy="57" r="4"/><circle cx="56" cy="75" r="5"/></g></g>
+<g transform="translate(390 16) rotate(7 56 66)"><rect width="112" height="137" rx="12" fill="#f1f9fc" stroke="#a7cede"/><path d="M56 34v68M26 68h60" stroke="#7faabc" stroke-width="6"/><circle cx="56" cy="68" r="18" stroke="#7faabc" fill="#e1f4fc"/></g>
+<g transform="translate(493 30) rotate(17 56 67)"><rect width="112" height="137" rx="12" fill="#fffaed" stroke="#dcc590"/><circle cx="56" cy="65" r="36" fill="none" stroke="#d2b06b" stroke-width="7"/><path d="M22 65c20-35 47 31 68 0" fill="none" stroke="#d2b06b" stroke-width="6"/></g>
+</g>
+<text x="350" y="154" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="132" font-weight="900" font-style="italic" letter-spacing="-8" fill="#f2f5fa" stroke="#152131" stroke-width="9" paint-order="stroke">TCG</text>
+<rect x="159" y="157" width="382" height="47" rx="13" fill="#25344a" stroke="#66798e" stroke-width="2.5"/>
+<text x="350" y="187" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="800" letter-spacing="3"><tspan fill="#f1bbda">BID</tspan><tspan fill="#bbcadb"> · </tspan><tspan fill="#a7e0f2">BUY</tspan><tspan fill="#bbcadb"> · </tspan><tspan fill="#f0cd92">WATCH</tspan></text></svg>

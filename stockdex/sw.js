@@ -1,4 +1,4 @@
-const CACHE='stockdex-preview-v1';
+const CACHE='stockdex-live-api-v2';
 const BASE=new URL('./',self.location.href);
 const OFFLINE=['./','./index.html','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(OFFLINE)).then(()=>self.skipWaiting()))});

@@ -1,0 +1,19 @@
+{
+  "name": "StockDex – Australian Pokémon Drop Radar",
+  "short_name": "StockDex",
+  "description": "An installable Pokédex-inspired Pokémon TCG retail stock watchlist and alert preview for Australia.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f6f7fb",
+  "theme_color": "#df293b",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

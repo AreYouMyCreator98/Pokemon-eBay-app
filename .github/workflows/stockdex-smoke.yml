@@ -26,6 +26,15 @@ jobs:
           curl --fail-with-body --retry 3 --retry-delay 4 --connect-timeout 10 --max-time 30 -sS \
             "https://prxvxomflqzviqiktcgr.supabase.co/functions/v1/stockdex-api?action=events" > events.json
           node -e 'const d=require("./events.json");if(!d.ok||!Array.isArray(d.events))throw Error("Unexpected event feed response");console.log("Stored verified events:",d.events.length)'
+      - name: Reject fake unauthorized retailer drop
+        run: |
+          set -euo pipefail
+          STATUS=$(curl --max-time 30 -sS -o rejected.json -w "%{http_code}" \
+            -X POST "https://prxvxomflqzviqiktcgr.supabase.co/functions/v1/stockdex-api?action=provider" \
+            -H "Content-Type: application/json" \
+            --data '{"id":"fake-event","retailer":"jb","product":"Fake 30th ETB","status":"in_stock","price":1,"url":"https://www.jbhifi.com.au/fake"}')
+          test "$STATUS" = "401"
+          node -e 'const d=require("./rejected.json");if(d.ok||d.error!=="Unauthorized feed")throw Error("Unauthorized event was not rejected");console.log("Unauthorized stock injection correctly blocked")'
       - name: Verify app deploy responds
         run: |
           set -euo pipefail

@@ -137,6 +137,51 @@ el('search-btn').addEventListener('click',function(){switchPage('alerts');var q=
 el('test-notification').addEventListener('click',async function(){if(!state.opts.notifications){toast('Enable notifications in Settings first');return}if(!('Notification'in window)){toast('Browser notifications are not supported here');return}try{var perm=Notification.permission;if(perm==='default')perm=await Notification.requestPermission();if(perm!=='granted'){toast('Notification permission not granted');return}if('serviceWorker'in navigator){var reg=await navigator.serviceWorker.ready;await reg.showNotification('StockDex · TEST ALERT',{body:'Example only: JB Hi-Fi just dropped Pokémon ETBs!',icon:'./icon.svg',badge:'./icon.svg',tag:'stockdex-test',data:{url:location.href}})}else new Notification('StockDex · TEST ALERT',{body:'Example only: JB Hi-Fi just dropped Pokémon ETBs!'});if(state.opts.vibration&&'vibrate'in navigator)navigator.vibrate([80,50,80]);toast('Test notification sent')}catch(err){toast('Unable to send test notification: '+(err.message||'check app permissions'))}});
 window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();deferredPrompt=e});el('install-app').addEventListener('click',async function(){if(deferredPrompt){deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null}else toast('Android Chrome: menu ⋮ → Add to Home screen / Install app')});
 if('serviceWorker'in navigator)window.addEventListener('load',function(){navigator.serviceWorker.register('./sw.js').catch(function(){})});
-render();
+
+function updateSignal(){
+ var online=feed.status==='online',offline=feed.status==='offline';
+ el('signal-title').textContent=online?'Push backend reachable':offline?'Alert backend unavailable':'Checking alert service…';
+ el('signal-detail').textContent=online?'Live feed awaiting licensed stock-data access. No retailer monitoring is active yet.':offline?'Unable to reach StockDex backend; saved watches remain on this device.':'Checking background notification service.';
+ el('signal-state').textContent=online?'FEED PENDING':offline?'OFFLINE':'CHECK';
+ el('remote-push-title').textContent=feed.registered?'Your device is registered':online?'Push service ready':'Push service not connected';
+ el('remote-push-detail').textContent=feed.registered?'Server-side alerts enabled; awaiting real stock feed.':'Allow notifications to receive server-side alerts when available.';
+ el('enable-remote-push').textContent=feed.registered?'✓ Push registered':'Enable real push notifications';
+ el('send-remote-test').disabled=!feed.registered;
+}
+async function api(action,body){
+ var options=body===undefined?{cache:'no-store'}:{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),cache:'no-store'};
+ var res=await fetch(API+'?action='+encodeURIComponent(action),options),data=await res.json();
+ if(!res.ok||!data.ok)throw Error(data.error||'Server unavailable');return data;
+}
+async function refreshFeed(){
+ try{var p=await Promise.all([api('status'),api('events')]);feed.status='online';feed.vapid=p[0].vapidPublicKey;feed.events=p[1].events||[];updateSignal();renderAlerts();
+ if(localStorage.getItem('stockdex-remote-device')&&'Notification'in window&&Notification.permission==='granted'&&!feed.registered)await pushRegister(false);
+ }catch(e){feed.status='offline';feed.events=[];updateSignal();renderAlerts()}
+}
+function applicationKey(value){var base=value.replace(/-/g,'+').replace(/_/g,'/');base+='='.repeat((4-base.length%4)%4);var str=atob(base),bytes=new Uint8Array(str.length);for(var i=0;i<str.length;i++)bytes[i]=str.charCodeAt(i);return bytes}
+function credentials(){
+ var raw=localStorage.getItem('stockdex-remote-device');if(raw){try{var d=JSON.parse(raw);if(d&&d.deviceId&&d.token)return d}catch(e){}}
+ var bytes=new Uint8Array(32);crypto.getRandomValues(bytes);
+ var creds={deviceId:crypto.randomUUID(),token:Array.from(bytes).map(function(b){return b.toString(16).padStart(2,'0')}).join('')};
+ localStorage.setItem('stockdex-remote-device',JSON.stringify(creds));return creds;
+}
+async function pushRegister(ask){
+ if(!('serviceWorker'in navigator)||!('PushManager'in window)||!('Notification'in window)){if(ask)toast('Background Web Push is unsupported on this browser');return false}
+ if(!feed.vapid){if(ask)toast('Push service not ready');return false}
+ try{
+ var permission=Notification.permission;
+ if(ask&&permission==='default')permission=await Notification.requestPermission();
+ if(permission!=='granted'){if(ask)toast('Please allow notifications for StockDex');feed.registered=false;updateSignal();return false}
+ var registration=await navigator.serviceWorker.ready,subscription=await registration.pushManager.getSubscription();
+ if(!subscription){if(!ask)return false;subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:applicationKey(feed.vapid)})}
+ var keys=credentials();await api('register',{deviceId:keys.deviceId,token:keys.token,subscription:subscription.toJSON(),watches:state.watches,opts:state.opts});
+ feed.registered=true;updateSignal();if(ask)toast('Phone registered for remote push notifications');return true;
+ }catch(e){feed.registered=false;updateSignal();if(ask)toast('Push registration failed: '+String(e.message||e).slice(0,95));return false}
+}
+el('enable-remote-push').addEventListener('click',async function(){this.disabled=true;try{await pushRegister(true)}finally{this.disabled=false}});
+el('send-remote-test').addEventListener('click',async function(){if(!feed.registered){toast('Enable remote push first');return}this.disabled=true;try{await api('test',credentials());toast('Test notification sent from the server')}catch(e){toast('Remote test failed: '+String(e.message||e))}finally{this.disabled=false}});
+document.addEventListener('visibilitychange',function(){if(!document.hidden)refreshFeed()});
+
+render();updateSignal();refreshFeed();setInterval(refreshFeed,90000);
 })();
 </script></body></html>

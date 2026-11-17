@@ -35,11 +35,14 @@ main{padding:0 16px 113px;min-height:calc(100dvh - 144px)}.page{display:none;ani
 <main>
 <section id="alerts-page" class="page active" aria-label="Alerts">
 <div class="scanner"><div class="scanner-top"><div class="radar"></div><div><div class="techline">AUSTRALIAN DROP TRACKER</div><h1>LIVE ALERTS</h1><p>Pre-orders, restocks and product releases.<br>One tap straight to the retailer.</p></div></div></div>
-<div class="connection"><div class="warning">!</div><div><b>Monitoring not connected</b><p>These are sample alerts. Real retailer checks and remote push are not live yet.</p></div><span>SETUP</span></div>
+<div class="connection"><div class="warning" id="signal-icon">!</div><div><b id="signal-title">Checking alert service…</b><p id="signal-detail">Connecting to the notification backend.</p></div><span id="signal-state">CHECK</span></div>
 <div class="section-title"><h2>RETAILER RADAR</h2><small id="filter-count">5 stores</small></div>
 <div id="filters" class="filters"></div>
-<div class="section-title"><h2>ALERT PREVIEW</h2><small>Examples only</small></div>
-<div id="alert-list"></div><div class="footer-note">Only verified store availability should trigger real alerts. Samples are never presented as genuine drops.</div>
+<div class="section-title"><h2>CONFIRMED DROPS</h2><small id="verified-count">Checking…</small></div>
+<div id="alert-list"></div>
+<button class="primary secondary" style="margin-top:10px" id="demo-toggle">Show sample alerts</button>
+<div id="demo-list" hidden style="margin-top:10px"></div>
+<div class="footer-note">Stock changes must come from a connected, approved feed. Example alerts are never represented as real stock.</div>
 </section>
 <section id="watchlist-page" class="page" aria-label="Watchlist">
 <div class="scanner"><div class="scanner-top"><div class="radar"></div><div><div class="techline">YOUR MUST-HAVES</div><h1>WATCHLIST</h1><p>Choose what to watch and which stores matter.</p></div></div></div>
@@ -57,7 +60,12 @@ main{padding:0 16px 113px;min-height:calc(100dvh - 144px)}.page{display:none;ani
 <button class="theme-tile" data-theme="midnight" aria-label="Midnight Dex theme"><div class="theme-art dark"></div><b>Midnight Dex</b></button>
 <button class="theme-tile" data-theme="pearl" aria-label="Pearl White theme"><div class="theme-art pearl"></div><b>Pearl White</b></button>
 </div>
-<div class="section-title" style="margin-top:21px"><h2>TEST NOTIFICATIONS</h2></div>
+<div class="section-title" style="margin-top:21px"><h2>BACKGROUND ALERTS</h2></div>
+<div class="panel"><div class="setting" style="padding-top:0"><div class="gearicon">↗</div><div class="setting-text"><b id="remote-push-title">Checking remote push…</b><small id="remote-push-detail">Checking server availability</small></div></div>
+<button class="primary" id="enable-remote-push">Enable real push notifications</button>
+<button class="primary secondary" id="send-remote-test" style="margin-top:8px">Send server-side test alert</button>
+<p class="note" style="margin:10px 0 0">Notifications reach your phone when the app is closed. Real retailer alerts only begin after a licensed stock feed is connected.</p></div>
+<div class="section-title"><h2>ON-DEVICE TEST</h2></div>
 <div class="panel"><div class="notification-preview"><svg class="brand-logo" style="width:30px;height:30px" viewBox="0 0 80 80"><rect x="10" y="14" width="60" height="53" rx="13" fill="#e9283a"/><path d="M10 42H70V55Q70 67 58 67H22Q10 67 10 55Z" fill="#fff"/><path d="M10 42H70" stroke="#202b3a" stroke-width="7"/><circle cx="40" cy="42" r="12" fill="#8fedfa" stroke="#182739" stroke-width="6"/></svg><div><b>Target just dropped Pokémon ETBs!</b><div style="font-size:9px;color:var(--muted);font-weight:600">Preview notification · Not an actual restock</div></div></div><button class="primary secondary" id="test-notification">▶ Send test notification</button><p class="note" style="margin:9px 0 0">Works on supported devices after you allow notifications. This test does not enable background retailer alerts.</p></div>
 <div class="section-title"><h2>FAVOURITE STORES</h2></div><div class="panel"><div class="store-options" id="store-options"></div><p class="note" style="margin:10px 0 0">Your selections affect filters and new watchlist items.</p></div>
 <div class="section-title"><h2>PREFERENCES</h2></div>
@@ -87,9 +95,10 @@ var STORES=[{id:'jb',name:'JB Hi-Fi',short:'JB',url:'https://www.jbhifi.com.au/s
 var EXAMPLES=[{store:'jb',label:'PRE-ORDER OPEN',name:'JB Hi-Fi just dropped 30th Anniversary ETBs',detail:'Example pre-order message · availability unverified'},{store:'bigw',label:'IN STOCK',name:'Big W restocked Prismatic Evolutions Booster Bundles',detail:'Example restock message · availability unverified'},{store:'eb',label:'PRE-ORDER OPEN',name:'EB Games opened pre-orders for 30th Anniversary Mini Tins',detail:'Example pre-order message · availability unverified'},{store:'woolworths',label:'LOW STOCK',name:'Woolworths has Prismatic Evolutions ETBs',detail:'Example low-stock message · availability unverified'}];
 var DEFAULT_WATCHES=[{id:'starter-1',name:'30th Anniversary ETB',type:'etb',max:0,stores:['jb','target','bigw','eb'],enabled:true},{id:'starter-2',name:'Prismatic Evolutions ETB',type:'prismatic',max:0,stores:['bigw','eb'],enabled:true},{id:'starter-3',name:'Booster Bundle',type:'bundle',max:0,stores:['bigw','woolworths'],enabled:true},{id:'starter-4',name:'Pokémon Mini Tin',type:'tin',max:0,stores:['eb','target'],enabled:true}];
 var KEY='stockdex-preferences-v1',state,activeStore='all',searchTerm='',deferredPrompt=null,toastTimer=null,selectedFormStores=[];
+var API='https://prxvxomflqzviqiktcgr.supabase.co/functions/v1/stockdex-api',feed={status:'loading',events:[],vapid:null,registered:false},examples=false,syncTimer=null;
 function load(){try{var x=JSON.parse(localStorage.getItem(KEY));if(x&&Array.isArray(x.watches)){return x;}}catch(e){}return {theme:'red',opts:{notifications:true,sound:true,vibration:true,quiet:false},stores:STORES.map(function(s){return s.id}),watches:DEFAULT_WATCHES};}
 state=load();if(!state.opts||!Array.isArray(state.stores))state=load();
-function save(){try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}if(feed.registered){clearTimeout(syncTimer);syncTimer=setTimeout(function(){pushRegister(false)},1500)}}
 function el(id){return document.getElementById(id);}
 function safe(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function store(id){return STORES.find(function(s){return s.id===id})||STORES[0]}

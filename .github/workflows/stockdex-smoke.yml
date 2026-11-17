@@ -1,0 +1,35 @@
+name: StockDex API smoke test
+on:
+  push:
+    branches:
+      - stockdex-standalone
+    paths:
+      - "stockdex/**"
+      - ".github/workflows/stockdex-smoke.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  stockdex:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Check deployed Edge status
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --retry 4 --retry-delay 5 --connect-timeout 10 --max-time 30 -sS \
+            "https://prxvxomflqzviqiktcgr.supabase.co/functions/v1/stockdex-api?action=status" > status.json
+          node -e 'const d=require("./status.json");if(!d.ok||d.service!=="stockdex-api"||!d.pushConfigured||!d.vapidPublicKey)throw Error("StockDex backend is not ready");console.log("Backend status passed. Feed mode:",d.feedMode)'
+      - name: Verify no fabricated live drops
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --retry 3 --retry-delay 4 --connect-timeout 10 --max-time 30 -sS \
+            "https://prxvxomflqzviqiktcgr.supabase.co/functions/v1/stockdex-api?action=events" > events.json
+          node -e 'const d=require("./events.json");if(!d.ok||!Array.isArray(d.events))throw Error("Unexpected event feed response");console.log("Stored verified events:",d.events.length)'
+      - name: Verify app deploy responds
+        run: |
+          set -euo pipefail
+          curl --fail --retry 3 --retry-delay 3 --connect-timeout 10 --max-time 30 -sS \
+            "https://stockdex-au.onrender.com" > page.html
+          grep -q "StockDex" page.html
+          echo "StockDex website responds"

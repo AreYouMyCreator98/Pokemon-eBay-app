@@ -7,6 +7,7 @@ import { withinBudget, amountFor } from "./public/market-v2.js";
 import { evaluateDeals, validateBenchmark } from "./public/deal-engine.js";
 import { identityOf, findTieredAskingOpportunities } from "./public/ebay-comparables.js";
 import { filterCollectorListings, sortCollectorListings } from "./public/collector-quality.js";
+import { createPhotoSearch } from "./lot-xray.js";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,6 +22,7 @@ try {
     if (match && !process.env[match[1]]) process.env[match[1]] = match[2].replace(/^['"]|['"]$/g, "");
   }
 } catch {}
+const searchAuctionPhotos = createPhotoSearch(process.env.LOT_XRAY_INDEX);
 const MARKETPLACES = { AU: { id: "EBAY_AU", currency: "AUD" }, US: { id: "EBAY_US", currency: "USD" } };
 let tokenCache = { value: "", expiresAt: 0 };
 let tokenPromise;
@@ -286,10 +288,15 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==="GET"&&url.pathname==="/api/health")return send(res,200,{ok:true,ebayConfigured:Boolean(process.env.EBAY_CLIENT_ID&&process.env.EBAY_CLIENT_SECRET)});
   if(req.method==="GET"&&url.pathname==="/api/version")return send(res,200,{ui:"v3-early-signals-20261106-2",commit:process.env.RENDER_GIT_COMMIT?.slice(0,12)||null});
   if(req.method==="GET"&&url.pathname==="/api/search"){try{return send(res,200,await cachedSearch(url.searchParams));}catch(error){return send(res,502,{error:error.message||"Search unavailable"});}}
+  if(req.method==="GET"&&url.pathname==="/api/lot-xray"){
+    const {status,body}=await searchAuctionPhotos(url.searchParams.get("q"));
+    return send(res,status,body);
+  }
   if(req.method==="GET"&&url.pathname==="/api/deals"){try{return send(res,200,await getMarketDeals(url.searchParams));}catch(error){console.warn("Deal discovery unavailable",error.message);return send(res,502,{error:"Live deal discovery is temporarily unavailable. Try again."});}}
   if(req.method==="GET"&&url.pathname==="/api/sold")return send(res,200,{available:false,items:[],message:"Verified sold-history access is not connected. eBay Marketplace Insights access is restricted; no sold prices are fabricated or scraped."});
   if(req.method!=="GET")return send(res,405,{error:"Method not allowed"});
-  const requested=url.pathname==="/"? "index.html":decodeURIComponent(url.pathname.slice(1));
+  const homes={"/":"index.html","/lot-xray":"lot-xray.html","/lot-xray/":"lot-xray.html"};
+  const requested=homes[url.pathname]??decodeURIComponent(url.pathname.slice(1));
   const safePath=normalize(requested).replace(/^([.][.][/\\])+/, ""),file=join(PUBLIC,safePath);
   if(!file.startsWith(PUBLIC))return send(res,403,{error:"Forbidden"});
   try{const body=await readFile(file);res.writeHead(200,{"Content-Type":mime[extname(file)]||"application/octet-stream","X-Content-Type-Options":"nosniff","Cache-Control":"no-store, max-age=0, must-revalidate","X-TCG-UI-Version":"v3-early-signals-20261106-2"});res.end(body);}catch{send(res,404,"Not found","text/plain; charset=utf-8");}

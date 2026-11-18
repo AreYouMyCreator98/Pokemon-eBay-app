@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b121a">
+  <title>Lot X-Ray</title>
+  <link rel="stylesheet" href="/lot-xray.css">
+  <script type="module" src="/lot-xray.js"></script>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>LOT <span>X-RAY</span></h1>
+      <form id="photo-search" role="search">
+        <label class="screen-reader" for="card">Pokémon card or collector number</label>
+        <input id="card" type="search" name="q" placeholder="Search a card, e.g. Magikarp 203/193" maxlength="100" required enterkeyhint="search" autocomplete="off" spellcheck="false">
+        <button type="submit" aria-label="Search">Search</button>
+      </form>
+    </header>
+    <p id="search-status" role="status" aria-live="polite"></p>
+    <ul id="results" aria-label="Auction matches"></ul>
+  </main>
+</body>
+</html>
